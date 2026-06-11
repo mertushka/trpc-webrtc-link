@@ -2,7 +2,8 @@
 
 ## Setup
 
-Building requires Node.js 22.18 or newer.
+Building requires Node.js 22.18 or newer. The browser end-to-end test also
+requires Google Chrome Stable.
 
 ```sh
 npm install
@@ -12,7 +13,8 @@ npm run check
 The check command runs formatting, linting, type checking, unit tests, the real
 Node WebRTC integration test, declaration tests, packed ESM/CommonJS/browser
 consumer tests, package export and declaration validation with `publint` and
-Are the Types Wrong, package/example builds, and an npm audit.
+Are the Types Wrong, a real Chrome browser-to-Node WebRTC flow,
+package/example builds, and an npm audit.
 
 CI builds with Node.js 24, then installs and tests the resulting tarball on
 Node.js 20.19, 22.18, and 24. Lower runtime targets do not execute `tsdown`.
