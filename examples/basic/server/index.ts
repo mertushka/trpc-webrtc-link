@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
 import {
   RTCPeerConnection,
   type RTCDataChannelEvent,
@@ -14,8 +15,22 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { appRouter } from '../shared/router.js';
 import { parseSignalingMessage, type SignalingMessage } from '../shared/signaling.js';
 
+const host = '127.0.0.1';
 const port = 8787;
-const wss = new WebSocketServer({ port });
+const httpServer = createServer((request, response) => {
+  if (request.method === 'GET' && request.url === '/health') {
+    response.writeHead(200, {
+      'cache-control': 'no-store',
+      'content-type': 'application/json',
+    });
+    response.end('{"status":"ok"}');
+    return;
+  }
+
+  response.writeHead(404);
+  response.end();
+});
+const wss = new WebSocketServer({ server: httpServer });
 const peers = new Set<{
   socket: WebSocket;
   peerConnection: RTCPeerConnection;
@@ -111,9 +126,12 @@ function shutdown(): void {
     peer.socket.close();
   }
   wss.close();
+  httpServer.close();
 }
 
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
 
-console.log(`Signaling server listening on ws://127.0.0.1:${port}`);
+httpServer.listen(port, host, () => {
+  console.log(`Signaling server listening on ws://${host}:${port}`);
+});

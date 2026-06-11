@@ -156,6 +156,7 @@ cancelButton.addEventListener('click', () => {
   clockSubscription?.unsubscribe();
   clockSubscription = undefined;
   cancelButton.disabled = true;
+  log('clock subscription cancelled');
 });
 
 window.addEventListener('beforeunload', () => {
