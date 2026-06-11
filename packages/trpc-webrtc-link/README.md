@@ -7,12 +7,17 @@ This package handles tRPC framing, execution, cancellation, error shaping, and
 backpressure. It does **not** perform SDP/ICE signaling, peer discovery,
 reconnection, or authentication.
 
-## Requirements
+## Runtime requirements
 
-- Node.js 20 or newer;
+- Node.js 20.19 or newer;
 - TypeScript 5.7.2 or newer;
 - matching tRPC v11 `@trpc/client` and `@trpc/server` versions;
 - an ordered, reliable `RTCDataChannel`.
+
+Building this repository requires Node.js 22.18 or newer because that is the
+minimum supported version for the current `tsdown` build tool. Published output
+is compiled on Node.js 24 and its packed runtime is tested on Node.js 20.19,
+22.18, and 24.
 
 ## Installation
 
