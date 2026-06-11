@@ -1,6 +1,6 @@
 {
   "name": "@mertushka/trpc-webrtc-link",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A tRPC v11 terminating client link and server adapter for established RTCDataChannels.",
   "keywords": [
     "trpc",
