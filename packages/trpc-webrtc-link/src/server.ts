@@ -239,7 +239,12 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
       void this.#fatalProtocolError(`Unexpected client frame: ${frame.type}`);
       return;
     }
-    void this.#handleClientFrame(frame);
+    void this.#handleClientFrame(frame).catch((cause: unknown) => {
+      this.close({
+        closeChannel: true,
+        reason: cause instanceof Error ? cause : new Error(String(cause)),
+      });
+    });
   }
 
   async #handleClientFrame(frame: WebRTCClientFrame): Promise<void> {
