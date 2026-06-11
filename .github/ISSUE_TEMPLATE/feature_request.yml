@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a focused change to the RTCDataChannel transport.
+title: 'feat: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The core package intentionally excludes signaling, peer discovery, reconnection,
+        React bindings, batching, and unrelated protocol multiplexing.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the concrete transport problem or use case.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behavior
+      description: Include a TypeScript example when the request changes public API.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Explain application-level or existing API approaches you considered.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This request belongs in the transport package rather than application signaling.
+          required: true
