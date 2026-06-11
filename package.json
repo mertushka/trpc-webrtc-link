@@ -11,7 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build --workspace @mertushka/trpc-webrtc-link && npm run typecheck --workspaces --if-present",
     "test": "npm run test:unit && npm run test:integration && npm run test:types && npm run test:package",
     "test:unit": "npm run test:unit --workspace @mertushka/trpc-webrtc-link",
     "test:integration": "npm run test:integration --workspace @mertushka/trpc-webrtc-link",
