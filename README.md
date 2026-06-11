@@ -25,5 +25,7 @@ Then open <http://127.0.0.1:5173>.
 The implementation plan and upstream API decisions are recorded in
 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
+Released changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
+
 Release automation and the one-time npm Trusted Publishing bootstrap are
 documented in [`RELEASING.md`](RELEASING.md).

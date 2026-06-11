@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible problem with the package or example.
+title: 'bug: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, private SDP, ICE server passwords, or production peer identifiers.
+        Report security issues through the private security advisory link instead.
+
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: trpc-version
+    attributes:
+      label: tRPC version
+      placeholder: 11.17.0
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Runtime environment
+      description: Include Node.js and browser versions where relevant.
+      placeholder: Node.js 22.18.0, Chrome 137
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Explain the observed behavior and its impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide a repository, test case, or concise steps that reproduce the issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Remove secrets and private connection metadata before posting.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I reproduced this with the latest package version.
+          required: true
+        - label: This report does not contain sensitive connection information.
+          required: true
