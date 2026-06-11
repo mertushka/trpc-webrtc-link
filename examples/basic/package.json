@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@mertushka/trpc-webrtc-link": "0.1.0",
+    "@mertushka/trpc-webrtc-link": "0.1.1",
     "@mertushka/webrtc-node": "^0.1.5",
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",

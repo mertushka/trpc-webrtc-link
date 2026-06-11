@@ -8,5 +8,16 @@ export default defineConfig({
     hookTimeout: 5_000,
     pool: 'forks',
     maxWorkers: 1,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      reporter: ['text', 'json-summary', 'lcov'],
+      thresholds: {
+        statements: 82,
+        branches: 77,
+        functions: 87,
+        lines: 82,
+      },
+    },
   },
 });

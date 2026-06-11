@@ -16,6 +16,10 @@ consumer tests, package export and declaration validation with `publint` and
 Are the Types Wrong, a real Chrome browser-to-Node WebRTC flow,
 package/example builds, and an npm audit.
 
+Unit tests enforce source coverage thresholds of 82% statements, 77% branches,
+87% functions, and 82% lines. Text coverage is printed during the test run;
+JSON and LCOV reports are written to `packages/trpc-webrtc-link/coverage`.
+
 CI builds with Node.js 24, then installs and tests the resulting tarball on
 Node.js 20.19, 22.18, and 24. Lower runtime targets do not execute `tsdown`.
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-11
+
+### Fixed
+
+- Close the server handler cleanly when an asynchronous control-frame reply
+  fails instead of allowing an unhandled promise rejection.
+
+### Added
+
+- Failure-path coverage for channel factories, handshake timeouts, context
+  creation, frame limits, native send errors, channel setup, and repeated
+  cleanup.
+- Enforced V8 source coverage thresholds with text, JSON, and LCOV reports.
+- Automated Google Chrome browser-to-Node WebRTC coverage in CI.
+
 ## [0.1.0] - 2026-06-11
 
 ### Added
@@ -23,5 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit, Node-to-Node integration, type inference, packed consumer, and browser
   example coverage.
 
-[Unreleased]: https://github.com/mertushka/trpc-webrtc-link/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mertushka/trpc-webrtc-link/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/mertushka/trpc-webrtc-link/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mertushka/trpc-webrtc-link/releases/tag/v0.1.0
