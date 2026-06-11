@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tRPC over WebRTC</title>
+  </head>
+  <body>
+    <main>
+      <h1>tRPC over an RTCDataChannel</h1>
+      <p id="status">Connecting...</p>
+      <div class="actions">
+        <button id="hello" disabled>hello.query()</button>
+        <button id="increment" disabled>counter.increment.mutate()</button>
+        <button id="clock" disabled>clock.subscribe()</button>
+        <button id="cancel" disabled>Cancel subscription</button>
+      </div>
+      <pre id="output"></pre>
+    </main>
+    <script type="module" src="/browser/main.ts"></script>
+  </body>
+</html>

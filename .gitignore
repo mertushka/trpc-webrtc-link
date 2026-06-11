@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.vite/
+.env
+.env.*
+!.env.example
+*.tgz
+*.log

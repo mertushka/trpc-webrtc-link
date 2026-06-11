@@ -1,0 +1,34 @@
+{
+  "name": "trpc-webrtc-link-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test:unit && npm run test:integration && npm run test:types && npm run test:package",
+    "test:unit": "npm run test:unit --workspace @mertushka/trpc-webrtc-link",
+    "test:integration": "npm run test:integration --workspace @mertushka/trpc-webrtc-link",
+    "test:types": "npm run test:types --workspace @mertushka/trpc-webrtc-link",
+    "test:package": "npm run build --workspace @mertushka/trpc-webrtc-link && node scripts/test-packed-package.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^25.0.0",
+    "eslint": "^10.0.0",
+    "globals": "^17.0.0",
+    "prettier": "^3.8.0",
+    "typescript": "^6.0.0",
+    "typescript-eslint": "^8.61.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

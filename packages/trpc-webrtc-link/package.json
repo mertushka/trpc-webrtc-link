@@ -1,0 +1,75 @@
+{
+  "name": "@mertushka/trpc-webrtc-link",
+  "version": "0.1.0",
+  "description": "A tRPC v11 terminating client link and server adapter for established RTCDataChannels.",
+  "keywords": [
+    "trpc",
+    "webrtc",
+    "rtcdatachannel",
+    "typescript",
+    "subscriptions"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mertushka/trpc-webrtc-link.git",
+    "directory": "packages/trpc-webrtc-link"
+  },
+  "homepage": "https://github.com/mertushka/trpc-webrtc-link#readme",
+  "bugs": {
+    "url": "https://github.com/mertushka/trpc-webrtc-link/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:types": "npm run build && tsd"
+  },
+  "peerDependencies": {
+    "@trpc/client": "~11.17.0",
+    "@trpc/server": "~11.17.0"
+  },
+  "devDependencies": {
+    "@mertushka/webrtc-node": "^0.1.5",
+    "@trpc/client": "^11.17.0",
+    "@trpc/server": "^11.17.0",
+    "superjson": "^2.2.6",
+    "tsd": "^0.33.0",
+    "tsdown": "^0.22.2",
+    "vitest": "^4.1.8",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "tsd": {
+    "directory": "test-d"
+  }
+}
