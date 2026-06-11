@@ -17,14 +17,17 @@
     "test:integration": "npm run test:integration --workspace @mertushka/trpc-webrtc-link",
     "test:types": "npm run test:types --workspace @mertushka/trpc-webrtc-link",
     "test:package": "npm run build --workspace @mertushka/trpc-webrtc-link && node scripts/test-packed-package.mjs",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm audit --audit-level=high"
+    "check:package": "npm run build --workspace @mertushka/trpc-webrtc-link && publint packages/trpc-webrtc-link --strict && attw --pack packages/trpc-webrtc-link --profile node16 --no-emoji",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run check:package && npm run build && npm audit --audit-level=high"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.3",
     "@eslint/js": "^10.0.0",
     "@types/node": "^25.0.0",
     "eslint": "^10.0.0",
     "globals": "^17.0.0",
     "prettier": "^3.8.0",
+    "publint": "^0.3.21",
     "typescript": "^6.0.0",
     "typescript-eslint": "^8.61.0"
   },
