@@ -23,13 +23,3 @@ Open <http://127.0.0.1:5173>. The UI demonstrates:
 
 The signaling server listens on `ws://127.0.0.1:8787`. It does not forward
 tRPC messages and is intentionally separate from the transport package.
-
-Run the automated Google Chrome flow from the repository root:
-
-```sh
-npm run test:e2e
-```
-
-The test starts the signaling server and Vite, then verifies queries, a
-mutation, subscription values, and cancellation over a real browser
-`RTCDataChannel`.

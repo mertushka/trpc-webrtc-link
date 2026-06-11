@@ -15,7 +15,7 @@
     "url": "git+https://github.com/mertushka/trpc-webrtc-link.git",
     "directory": "packages/trpc-webrtc-link"
   },
-  "homepage": "https://github.com/mertushka/trpc-webrtc-link#readme",
+  "homepage": "https://github.com/mertushka/trpc-webrtc-link/tree/main/packages/trpc-webrtc-link#readme",
   "bugs": {
     "url": "https://github.com/mertushka/trpc-webrtc-link/issues"
   },

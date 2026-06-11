@@ -23,6 +23,22 @@ JSON and LCOV reports are written to `packages/trpc-webrtc-link/coverage`.
 CI builds with Node.js 24, then installs and tests the resulting tarball on
 Node.js 20.19, 22.18, and 24. Lower runtime targets do not execute `tsdown`.
 
+Run only the browser end-to-end flow with:
+
+```sh
+npm run test:e2e
+```
+
+## Architecture constraints
+
+- Browser-facing package source must use the structural `RTCDataChannelLike`
+  interface and must not import or bundle `@mertushka/webrtc-node`.
+- The package prefers public tRPC APIs. The required
+  `router._def._config` access is isolated in `src/trpc-internals.ts` and is the
+  reason the peer dependency remains pinned to `~11.17.0`.
+- Keep signaling, peer discovery, authentication, reconnection, and framework
+  integrations outside the core transport.
+
 ## Pull requests
 
 Create a branch from `main`, keep changes focused, and open a pull request.
@@ -36,6 +52,3 @@ connection metadata to issues, tests, logs, or examples.
 Use [Conventional Commits](https://www.conventionalcommits.org/) for commit
 messages, for example `feat: add transport option` or
 `fix: reject pending operations on close`.
-
-Keep signaling, reconnection, and framework integrations outside the core
-transport unless a change is required for protocol correctness.

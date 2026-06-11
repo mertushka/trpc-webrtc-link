@@ -1,31 +1,40 @@
 # @mertushka/trpc-webrtc-link
 
-An npm workspace containing:
+Transport tRPC v11 queries, mutations, and subscriptions over an established
+WebRTC `RTCDataChannel`.
 
-- [`@mertushka/trpc-webrtc-link`](packages/trpc-webrtc-link), a tRPC v11
-  terminating link and server adapter for established RTC data channels;
-- [`examples/basic`](examples/basic), a browser-to-Node example with separate
-  WebSocket signaling.
+The package provides:
 
-## Development
+- a terminating tRPC client link;
+- a server handler for tRPC routers;
+- cancellation and concurrent operations;
+- transformed inputs, outputs, and errors;
+- bounded, fair backpressure handling;
+- browser support using native WebRTC APIs;
+- Node.js support through [`@mertushka/webrtc-node`](https://www.npmjs.com/package/@mertushka/webrtc-node).
+
+It does not perform SDP or ICE signaling, peer discovery, authentication,
+reconnection, or exactly-once delivery.
+
+## Installation
 
 ```sh
-npm install
-npm run check
+npm install @mertushka/trpc-webrtc-link @trpc/client @trpc/server
 ```
 
-Run the example:
+Node.js peers also need:
 
 ```sh
-npm run dev --workspace @mertushka/trpc-webrtc-link-example-basic
+npm install @mertushka/webrtc-node
 ```
 
-Then open <http://127.0.0.1:5173>.
+## Documentation
 
-The implementation plan and upstream API decisions are recorded in
-[`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+- [Package guide](packages/trpc-webrtc-link)
+- [Browser-to-Node example](examples/basic)
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
 
-Released changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
-
-Release automation and the one-time npm Trusted Publishing bootstrap are
-documented in [`RELEASING.md`](RELEASING.md).
+Signaling remains an application responsibility. Once an ordered, reliable
+data channel is open, pass it to `createWebRTCLink()` on the client and
+`createWebRTCHandler()` on the server.

@@ -1,54 +1,49 @@
 # Releasing
 
-Releases use npm Trusted Publishing from `.github/workflows/publish.yml`. The
-workflow runs on GitHub-hosted infrastructure with `id-token: write`, contains
-no npm token, and receives automatic npm provenance.
+Releases publish through npm Trusted Publishing from
+`.github/workflows/publish.yml`. The workflow uses GitHub OIDC, contains no npm
+token, and produces npm provenance.
 
-## One-time bootstrap
+## Prepare
 
-npm requires a package to exist before a trusted publisher can be configured.
-For the first version only:
-
-1. Run the full release check:
+1. Update the version in `packages/trpc-webrtc-link/package.json`.
+2. Update the package version used by `examples/basic/package.json`.
+3. Run `npm install --package-lock-only` to align `package-lock.json`.
+4. Move the release notes from `Unreleased` into a dated section in
+   `CHANGELOG.md`.
+5. Run:
 
    ```sh
    npm ci
    npm run check
+   npm pack --workspace @mertushka/trpc-webrtc-link --dry-run
    ```
 
-2. Authenticate an npm account with write access and 2FA, then publish the
-   package:
+6. Commit the release metadata with a Conventional Commit and merge it through
+   a pull request.
 
-   ```sh
-   npm login
-   npm publish --workspace @mertushka/trpc-webrtc-link --access public
-   ```
+## Publish
 
-3. With npm 11.10 or newer, configure the GitHub Actions trusted publisher:
+Create a GitHub release from the merged `main` commit with a tag matching the
+package version:
 
-   ```sh
-   npm trust github @mertushka/trpc-webrtc-link \
-     --repo mertushka/trpc-webrtc-link \
-     --file publish.yml \
-     --allow-publish
-   ```
+```sh
+gh release create v<version> \
+  --target <commit> \
+  --title "v<version>" \
+  --notes-file <release-notes.md>
+```
 
-   The same configuration can be entered on npmjs.com using:
+The publish workflow verifies the tag, runs the full check suite, and publishes
+the package with public access.
 
-   - organization or user: `mertushka`
-   - repository: `trpc-webrtc-link`
-   - workflow filename: `publish.yml`
-   - allowed action: `npm publish`
+## Verify
 
-4. In the npm package settings, set publishing access to require 2FA and
-   disallow tokens.
+Confirm the registry version and provenance:
 
-## Subsequent releases
+```sh
+npm view @mertushka/trpc-webrtc-link version dist.attestations dist.integrity
+```
 
-1. Update and commit the package version.
-2. Create a GitHub release tagged `v<package-version>`.
-3. The publish workflow verifies the tag, runs `npm run check`, and publishes
-   through OIDC.
-
-Trusted Publishing requires Node.js 22.14 or newer and npm 11.5.1 or newer.
-The workflow uses Node.js 24 and the bundled modern npm CLI.
+If publishing fails after a version reaches npm, do not reuse that version.
+Fix the issue and prepare a new patch release.
