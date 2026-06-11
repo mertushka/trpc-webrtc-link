@@ -14,11 +14,6 @@ reconnection, or authentication.
 - matching tRPC v11 `@trpc/client` and `@trpc/server` versions;
 - an ordered, reliable `RTCDataChannel`.
 
-Building this repository requires Node.js 22.18 or newer because that is the
-minimum supported version for the current `tsdown` build tool. Published output
-is compiled on Node.js 24 and its packed runtime is tested on Node.js 20.19,
-22.18, and 24.
-
 ## Installation
 
 ```sh
@@ -135,9 +130,10 @@ candidates using WebSocket, HTTP, QR codes, or another authenticated signaling
 system. After the data channel opens, pass it to `createWebRTCLink` or
 `createWebRTCHandler`.
 
-The runnable [`examples/basic`](../../examples/basic) application uses a
-WebSocket only for SDP/ICE. tRPC messages never pass through the signaling
-server.
+The runnable
+[`examples/basic`](https://github.com/mertushka/trpc-webrtc-link/tree/main/examples/basic)
+application uses a WebSocket only for SDP/ICE. tRPC messages never pass through
+the signaling server.
 
 ## Protocol
 
@@ -207,14 +203,8 @@ Defaults:
 
 ## tRPC compatibility
 
-The package uses public tRPC v11 APIs for links, observables, procedure calls,
-error shaping, and transformed responses.
-
-One internal detail is unavoidable: the adapter reads
-`router._def._config` to access the router's configured transformer and error
-formatter. That access is isolated in `src/trpc-internals.ts`, matches tRPC's
-own WebSocket adapter, and is covered by the `~11.17.0` peer range. New tRPC
-minor versions must be reviewed and tested before widening that range.
+The supported peer range is `~11.17.0`. Install matching `@trpc/client` and
+`@trpc/server` versions.
 
 ## Security
 
@@ -230,7 +220,7 @@ minor versions must be reviewed and tested before widening that range.
 
 ## Limitations
 
-The first release intentionally does not include:
+The package does not include:
 
 - SDP or ICE signaling;
 - reconnection or subscription resumption;
@@ -241,4 +231,8 @@ The first release intentionally does not include:
 - multiplexing unrelated protocols;
 - exactly-once delivery guarantees.
 
-These are future-work candidates rather than implicit behavior.
+## Support
+
+- [Report bugs or request features](https://github.com/mertushka/trpc-webrtc-link/issues)
+- [Report vulnerabilities privately](https://github.com/mertushka/trpc-webrtc-link/security/advisories/new)
+- [Review released changes](https://github.com/mertushka/trpc-webrtc-link/blob/main/CHANGELOG.md)
