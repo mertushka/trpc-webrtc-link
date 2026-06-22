@@ -54,8 +54,8 @@
     "@trpc/server": "~11.17.0"
   },
   "devDependencies": {
-    "@mertushka/webrtc-node": "^0.1.5",
-    "@trpc/client": "^11.17.0",
+    "@mertushka/webrtc-node": "^0.2.0",
+    "@trpc/client": "^11.18.0",
     "@trpc/server": "^11.17.0",
     "@vitest/coverage-v8": "^4.1.8",
     "superjson": "^2.2.6",
