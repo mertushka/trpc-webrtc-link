@@ -23,16 +23,16 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run check:package && npm run build && npm audit --audit-level=high"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.3",
+    "@arethetypeswrong/cli": "^0.18.4",
     "@eslint/js": "^10.0.0",
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^25.0.0",
-    "eslint": "^10.0.0",
-    "globals": "^17.0.0",
-    "prettier": "^3.8.0",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.4",
     "publint": "^0.3.21",
     "typescript": "^6.0.0",
-    "typescript-eslint": "^8.61.0"
+    "typescript-eslint": "^8.62.1"
   },
   "engines": {
     "node": ">=22.18.0"
