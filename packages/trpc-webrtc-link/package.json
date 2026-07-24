@@ -57,10 +57,10 @@
     "@mertushka/webrtc-node": "^0.2.1",
     "@trpc/client": "^11.18.0",
     "@trpc/server": "^11.17.0",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.10",
     "superjson": "^2.2.6",
     "tsd": "^0.33.0",
-    "tsdown": "^0.22.2",
+    "tsdown": "^0.22.14",
     "vitest": "^4.1.8",
     "zod": "^4.4.3"
   },
