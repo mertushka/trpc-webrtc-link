@@ -78,6 +78,39 @@ describe('WebRTC tRPC transport', () => {
     expect(values).toEqual([0, 1]);
   });
 
+  it('removes queued server writes when a subscription is cancelled', async () => {
+    harness = await createTestHarness({
+      serverBackpressure: {
+        highWatermark: 0,
+        lowWatermark: 0,
+        queueLimit: 8,
+      },
+    });
+    harness.serverChannel.autoDrain = false;
+    const values: number[] = [];
+
+    const subscription = harness.client.clock.subscribe(
+      { count: 100, waitMs: 0 },
+      {
+        onStarted() {
+          subscription.unsubscribe();
+        },
+        onData(value) {
+          values.push(value);
+        },
+      },
+    );
+
+    await waitFor(() => harness!.state.subscriptionCancellations === 1);
+    harness.serverChannel.drain();
+    await delay(20);
+
+    expect(values).toEqual([]);
+    expect(
+      harness.serverChannel.sent.filter((payload) => payload.includes('"type":"data"')),
+    ).toHaveLength(0);
+  });
+
   it('propagates AbortSignal cancellation to a running query', async () => {
     harness = await createTestHarness();
     const controller = new AbortController();

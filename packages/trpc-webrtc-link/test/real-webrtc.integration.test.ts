@@ -4,7 +4,7 @@ import {
   RTCPeerConnection,
   type RTCDataChannel,
   type RTCDataChannelEvent,
-} from '@mertushka/webrtc-node';
+} from '@webrtc-node/webrtc';
 import { afterEach, describe, expect, it } from 'vitest';
 import superjson from 'superjson';
 import {
@@ -93,7 +93,7 @@ async function createRealChannelPair(): Promise<{
   };
 }
 
-describe('real @mertushka/webrtc-node integration', () => {
+describe('real @webrtc-node/webrtc integration', () => {
   let cleanup: (() => void) | undefined;
 
   afterEach(() => {

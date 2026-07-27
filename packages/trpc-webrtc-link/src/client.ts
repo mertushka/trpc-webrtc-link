@@ -8,6 +8,7 @@ import { observable } from '@trpc/server/observable';
 import {
   assertReliableOrderedChannel,
   DataChannelWriter,
+  normalizeTimeoutMs,
   waitForDataChannelOpen,
   type RTCDataChannelLike,
   type RTCDataChannelMessageEventLike,
@@ -15,6 +16,7 @@ import {
 } from './channel.js';
 import {
   WebRTCChannelClosedError,
+  WebRTCChannelNotOpenError,
   WebRTCHandshakeTimeoutError,
   WebRTCProtocolError,
   type WebRTCTransportError,
@@ -139,11 +141,13 @@ class WebRTCClientTransport {
   readonly #onProtocolError: ((error: WebRTCProtocolError) => void) | undefined;
   readonly #closeChannelOnDispose: boolean;
   readonly #pending = new Map<WebRTCRequestId, PendingClientOperation>();
+  readonly #connectionController = new AbortController();
 
   #channel: RTCDataChannelLike | null = null;
   #writer: DataChannelWriter | null = null;
   #initializePromise: Promise<void> | null = null;
   #state: 'idle' | 'connecting' | 'ready' | 'closed' = 'idle';
+  #fatalError: Error | null = null;
   #handshakeResolve: (() => void) | null = null;
   #handshakeReject: ((error: Error) => void) | null = null;
 
@@ -166,9 +170,15 @@ class WebRTCClientTransport {
     this.#source = options.channel;
     this.#transformer = transformer;
     this.#backpressure = options.backpressure;
-    this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? 10_000;
+    this.#handshakeTimeoutMs = normalizeTimeoutMs(
+      options.handshakeTimeoutMs ?? 10_000,
+      'handshakeTimeoutMs',
+    );
     this.#onProtocolError = options.onProtocolError;
     this.#closeChannelOnDispose = options.closeChannelOnDispose ?? false;
+    if (typeof this.#source !== 'function') {
+      this.#channel = this.#source;
+    }
   }
 
   public subscribe(operation: ClientOperation, observer: ClientObserver): () => void {
@@ -239,7 +249,11 @@ class WebRTCClientTransport {
           },
           (error: Error) => {
             if (!pending.terminal) {
-              this.#finishWithError(pending, error);
+              if (this.#isFatalWriteError(error)) {
+                this.#failFatal(error);
+              } else {
+                this.#finishWithError(pending, error);
+              }
             }
           },
         );
@@ -277,7 +291,7 @@ class WebRTCClientTransport {
       return;
     }
     if (this.#state === 'closed') {
-      throw new WebRTCChannelClosedError('WebRTC link is closed');
+      throw this.#fatalError ?? new WebRTCChannelClosedError('WebRTC link is closed');
     }
     this.#initializePromise ??= this.#initialize();
     return this.#initializePromise;
@@ -287,25 +301,46 @@ class WebRTCClientTransport {
     this.#state = 'connecting';
     try {
       const channel = typeof this.#source === 'function' ? await this.#source() : this.#source;
-      assertReliableOrderedChannel(channel);
-      await waitForDataChannelOpen(channel, this.#handshakeTimeoutMs);
+      this.#channel = channel;
       if (this.#isClosed()) {
-        throw new WebRTCChannelClosedError('WebRTC link was closed while connecting');
+        if (this.#closeChannelOnDispose && channel.readyState !== 'closed') {
+          channel.close();
+        }
+        throw (
+          this.#fatalError ??
+          new WebRTCChannelClosedError('WebRTC link was closed while connecting')
+        );
+      }
+      assertReliableOrderedChannel(channel);
+      const handshakeDeadline = Date.now() + this.#handshakeTimeoutMs;
+      await waitForDataChannelOpen(
+        channel,
+        this.#handshakeTimeoutMs,
+        this.#connectionController.signal,
+      );
+      if (this.#isClosed()) {
+        throw (
+          this.#fatalError ??
+          new WebRTCChannelClosedError('WebRTC link was closed while connecting')
+        );
       }
 
-      this.#channel = channel;
       this.#writer = new DataChannelWriter(channel, this.#backpressure);
       channel.addEventListener('message', this.#onMessage);
       channel.addEventListener('close', this.#onClose);
       channel.addEventListener('error', this.#onError);
 
+      const remainingTimeoutMs = handshakeDeadline - Date.now();
+      if (remainingTimeoutMs <= 0) {
+        throw new WebRTCHandshakeTimeoutError(this.#handshakeTimeoutMs);
+      }
       const handshake = new Promise<void>((resolve, reject) => {
         this.#handshakeResolve = resolve;
         this.#handshakeReject = reject;
       });
       const timeout = setTimeout(() => {
         this.#handshakeReject?.(new WebRTCHandshakeTimeoutError(this.#handshakeTimeoutMs));
-      }, this.#handshakeTimeoutMs);
+      }, remainingTimeoutMs);
 
       await this.#writer.send(
         {
@@ -425,6 +460,10 @@ class WebRTCClientTransport {
           this.#finishProtocolError(pending, 'Operation completed without a result');
           return;
         }
+        if (pending.operation.type === 'subscription' && !pending.started) {
+          this.#finishProtocolError(pending, 'Subscription completed before it started');
+          return;
+        }
         this.#pending.delete(pending.id);
         pending.terminal = true;
         pending.cleanup();
@@ -510,11 +549,15 @@ class WebRTCClientTransport {
       };
       void this.#writer?.send(frame, id).catch((cause: Error) => {
         if (this.#state !== 'closed') {
-          this.#notifyProtocolError(
-            new WebRTCProtocolError(`Failed to send cancellation: ${cause.message}`, {
-              cause,
-            }),
-          );
+          if (this.#isFatalWriteError(cause)) {
+            this.#failFatal(cause);
+          } else {
+            this.#notifyProtocolError(
+              new WebRTCProtocolError(`Failed to send cancellation: ${cause.message}`, {
+                cause,
+              }),
+            );
+          }
         }
       });
     }
@@ -580,11 +623,17 @@ class WebRTCClientTransport {
     });
   }
 
+  #isFatalWriteError(error: Error): boolean {
+    return error instanceof WebRTCChannelClosedError || error instanceof WebRTCChannelNotOpenError;
+  }
+
   #failFatal(error: Error): void {
     if (this.#state === 'closed') {
       return;
     }
     this.#state = 'closed';
+    this.#fatalError = error;
+    this.#connectionController.abort(error);
     this.#handshakeReject?.(error);
     this.#handshakeResolve = null;
     this.#handshakeReject = null;

@@ -23,10 +23,10 @@ npm install @mertushka/trpc-webrtc-link @trpc/client @trpc/server
 For Node WebRTC peers:
 
 ```sh
-npm install @mertushka/webrtc-node
+npm install @webrtc-node/webrtc
 ```
 
-`@mertushka/webrtc-node` is not imported or bundled by this package. Browser
+`@webrtc-node/webrtc` is not imported or bundled by this package. Browser
 applications use the browser's native `RTCPeerConnection` and
 `RTCDataChannel`.
 
@@ -42,6 +42,7 @@ import type { AppRouter } from './server';
 
 const link = createWebRTCLink<AppRouter>({
   channel: () => connectedDataChannel,
+  handshakeTimeoutMs: 10_000,
   backpressure: {
     highWatermark: 1024 * 1024,
     lowWatermark: 256 * 1024,
@@ -79,6 +80,10 @@ The link returns remote tRPC errors and transport failures as
 `TRPCClientError`. Transport failures include `meta.transport === "webrtc"` and
 may include a `meta.transportCode`.
 
+`handshakeTimeoutMs` is one deadline for channel opening and protocol
+negotiation after an async channel factory resolves. Timeout values must be
+positive integer milliseconds.
+
 ## Server
 
 The server adapter creates context once per attached channel. Context receives
@@ -87,7 +92,7 @@ handler or channel closes.
 
 ```ts
 import { createWebRTCHandler } from '@mertushka/trpc-webrtc-link';
-import { RTCPeerConnection } from '@mertushka/webrtc-node';
+import { RTCPeerConnection } from '@webrtc-node/webrtc';
 import { appRouter } from './router';
 
 const peerConnection = new RTCPeerConnection();
@@ -100,6 +105,8 @@ peerConnection.addEventListener('datachannel', (event) => {
       peerConnection,
       userId: 'user-123',
     },
+    openTimeoutMs: 10_000,
+    handshakeTimeoutMs: 10_000,
     createContext({ channel, peer, signal }) {
       return {
         channel,
@@ -121,7 +128,9 @@ peerConnection.addEventListener('datachannel', (event) => {
 
 `close()` aborts active procedures, closes active subscription iterators,
 rejects queued writes, and removes listeners. It leaves the underlying channel
-open unless `closeChannel: true` is passed.
+open unless `closeChannel: true` is passed. `openTimeoutMs` bounds channel
+opening; `handshakeTimeoutMs` then bounds protocol negotiation and context
+creation.
 
 ## Signaling
 
@@ -131,7 +140,7 @@ system. After the data channel opens, pass it to `createWebRTCLink` or
 `createWebRTCHandler`.
 
 The runnable
-[`examples/basic`](https://github.com/mertushka/trpc-webrtc-link/tree/main/examples/basic)
+[`examples/basic`](https://github.com/webrtc-node/trpc-webrtc-link/tree/main/examples/basic)
 application uses a WebSocket only for SDP/ICE. tRPC messages never pass through
 the signaling server.
 
@@ -203,8 +212,9 @@ Defaults:
 
 ## tRPC compatibility
 
-The supported peer range is `~11.17.0`. Install matching `@trpc/client` and
-`@trpc/server` versions.
+The supported peer range is `>=11.17.0 <11.19.0`. Install matching
+`@trpc/client` and `@trpc/server` versions. CI tests the newest supported
+version directly and the minimum supported version as a packed consumer.
 
 ## Security
 
@@ -233,6 +243,6 @@ The package does not include:
 
 ## Support
 
-- [Report bugs or request features](https://github.com/mertushka/trpc-webrtc-link/issues)
-- [Report vulnerabilities privately](https://github.com/mertushka/trpc-webrtc-link/security/advisories/new)
-- [Review released changes](https://github.com/mertushka/trpc-webrtc-link/blob/main/CHANGELOG.md)
+- [Report bugs or request features](https://github.com/webrtc-node/trpc-webrtc-link/issues)
+- [Report vulnerabilities privately](https://github.com/webrtc-node/trpc-webrtc-link/security/advisories/new)
+- [Review released changes](https://github.com/webrtc-node/trpc-webrtc-link/blob/main/CHANGELOG.md)

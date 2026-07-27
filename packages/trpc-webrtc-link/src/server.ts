@@ -10,12 +10,17 @@ import { isObservable, observableToAsyncIterable } from '@trpc/server/observable
 import {
   assertReliableOrderedChannel,
   DataChannelWriter,
+  normalizeTimeoutMs,
   waitForDataChannelOpen,
   type RTCDataChannelLike,
   type RTCDataChannelMessageEventLike,
   type WebRTCBackpressureOptions,
 } from './channel.js';
-import { WebRTCChannelClosedError, WebRTCProtocolError } from './errors.js';
+import {
+  WebRTCChannelClosedError,
+  WebRTCHandshakeTimeoutError,
+  WebRTCProtocolError,
+} from './errors.js';
 import {
   parseWebRTCFrame,
   TRPC_WEBRTC_PROTOCOL,
@@ -59,6 +64,11 @@ export interface CreateWebRTCHandlerOptions<TRouter extends AnyTRPCRouter, TPeer
    * @default 10000
    */
   openTimeoutMs?: number;
+  /**
+   * Time allowed after opening for protocol negotiation and context creation.
+   * @default 10000
+   */
+  handshakeTimeoutMs?: number;
 }
 
 export interface WebRTCHandler {
@@ -140,11 +150,14 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
   readonly #contextController = new AbortController();
   readonly #active = new Map<WebRTCRequestId, ActiveServerOperation>();
   readonly #readyDeferred = deferred<void>();
+  readonly #openTimeoutMs: number;
+  readonly #handshakeTimeoutMs: number;
   readonly ready: Promise<void>;
 
   #state: 'awaiting_open' | 'awaiting_handshake' | 'creating_context' | 'ready' | 'closed' =
     'awaiting_open';
   #ctx: inferRouterContext<TRouter> | undefined;
+  #handshakeTimer: ReturnType<typeof setTimeout> | undefined;
 
   readonly #onMessage = (event: RTCDataChannelMessageEventLike) => {
     this.#handleMessage(event.data);
@@ -167,6 +180,11 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
     this.#router = options.router;
     this.#channel = options.channel;
     this.#peer = options.peer;
+    this.#openTimeoutMs = normalizeTimeoutMs(options.openTimeoutMs ?? 10_000, 'openTimeoutMs');
+    this.#handshakeTimeoutMs = normalizeTimeoutMs(
+      options.handshakeTimeoutMs ?? 10_000,
+      'handshakeTimeoutMs',
+    );
     assertReliableOrderedChannel(this.#channel);
     this.#writer = new DataChannelWriter(this.#channel, options.backpressure);
     this.ready = this.#readyDeferred.promise;
@@ -188,6 +206,10 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
     const reason = options.reason ?? new WebRTCChannelClosedError('WebRTC handler was closed');
     const wasReady = this.#state === 'ready';
     this.#state = 'closed';
+    if (this.#handshakeTimer !== undefined) {
+      clearTimeout(this.#handshakeTimer);
+      this.#handshakeTimer = undefined;
+    }
     this.#channel.removeEventListener('message', this.#onMessage);
     this.#channel.removeEventListener('close', this.#onClose);
     this.#channel.removeEventListener('error', this.#onChannelError);
@@ -207,9 +229,19 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
 
   async #initialize(): Promise<void> {
     try {
-      await waitForDataChannelOpen(this.#channel, this.#options.openTimeoutMs ?? 10_000);
+      await waitForDataChannelOpen(
+        this.#channel,
+        this.#openTimeoutMs,
+        this.#contextController.signal,
+      );
       if (this.#state !== 'closed') {
         this.#state = 'awaiting_handshake';
+        this.#handshakeTimer = setTimeout(() => {
+          this.close({
+            closeChannel: true,
+            reason: new WebRTCHandshakeTimeoutError(this.#handshakeTimeoutMs),
+          });
+        }, this.#handshakeTimeoutMs);
       }
     } catch (cause) {
       this.close({
@@ -278,7 +310,9 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
         );
         return;
       }
-      operation.controller.abort(createCancellationError(frame.reason));
+      const cancellationError = createCancellationError(frame.reason);
+      operation.controller.abort(cancellationError);
+      this.#writer.cancelKey(frame.id, cancellationError);
       return;
     }
     this.#handleRequest(frame);
@@ -308,9 +342,16 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
         },
         'control',
       );
+      if (this.#handshakeTimer !== undefined) {
+        clearTimeout(this.#handshakeTimer);
+        this.#handshakeTimer = undefined;
+      }
       this.#state = 'ready';
       this.#readyDeferred.resolve();
     } catch (cause) {
+      if (this.#isClosed()) {
+        return;
+      }
       const error = getTRPCErrorFromUnknown(cause);
       this.#notifyError(error, 'unknown', undefined, undefined);
       await this.#sendError(null, error, 'unknown', undefined, undefined).catch(() => undefined);
@@ -321,7 +362,9 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
   #handleRequest(request: WebRTCRequestFrame): void {
     const existing = this.#active.get(request.id);
     if (existing) {
-      existing.controller.abort(new WebRTCProtocolError(`Duplicate request id ${request.id}`));
+      const protocolError = new WebRTCProtocolError(`Duplicate request id ${request.id}`);
+      existing.controller.abort(protocolError);
+      this.#writer.cancelKey(request.id, protocolError);
       const error = new TRPCError({
         code: 'BAD_REQUEST',
         message: `Duplicate request id ${request.id}`,
@@ -351,6 +394,9 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
         signal: controller.signal,
         batchIndex: 0,
       });
+      if (controller.signal.aborted) {
+        return;
+      }
 
       if (request.procedureType !== 'subscription') {
         if (isAsyncIterable(result) || isObservable(result)) {
@@ -370,7 +416,9 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
           },
           request.id,
         );
-        await this.#sendComplete(request.id);
+        if (!controller.signal.aborted) {
+          await this.#sendComplete(request.id);
+        }
         return;
       }
 

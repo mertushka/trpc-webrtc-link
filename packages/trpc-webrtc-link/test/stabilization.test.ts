@@ -5,6 +5,7 @@ import {
   createWebRTCHandler,
   createWebRTCLink,
   TRPC_WEBRTC_PROTOCOL,
+  WebRTCHandshakeTimeoutError,
   type CreateWebRTCLinkOptions,
   type WebRTCHandler,
   type WebRTCLink,
@@ -75,6 +76,88 @@ describe('transport failure paths', () => {
         });
       }
     }
+  });
+
+  it('rejects invalid timeout options during setup', () => {
+    const pair = createInMemoryChannelPair();
+
+    expect(() =>
+      createClient({
+        channel: pair.client,
+        transformer: superjson,
+        handshakeTimeoutMs: 0,
+      }),
+    ).toThrow('handshakeTimeoutMs');
+    expect(() =>
+      createWebRTCHandler({
+        router: testRouter,
+        channel: pair.server,
+        peer: { name: 'test-peer' },
+        openTimeoutMs: Number.POSITIVE_INFINITY,
+      }),
+    ).toThrow('openTimeoutMs');
+  });
+
+  it('times out a server that never receives a handshake', async () => {
+    const pair = createInMemoryChannelPair();
+    handler = createWebRTCHandler({
+      router: testRouter,
+      channel: pair.server,
+      peer: { name: 'test-peer' },
+      handshakeTimeoutMs: 20,
+    });
+
+    await expect(handler.ready).rejects.toBeInstanceOf(WebRTCHandshakeTimeoutError);
+    await waitFor(() => pair.client.readyState === 'closed');
+    expect(pair.server.listenerCount()).toBe(0);
+    expect(pair.server.bufferedAmountLowThreshold).toBe(0);
+  });
+
+  it('aborts channel opening and closes an owned channel during disposal', async () => {
+    const pair = createInMemoryChannelPair();
+    pair.client.readyState = 'connecting';
+    const created = createClient({
+      channel: pair.client,
+      transformer: superjson,
+      handshakeTimeoutMs: 1_000,
+      closeChannelOnDispose: true,
+    });
+    link = created.link;
+    const request = created.client.hello.query({ name: 'opening' });
+    await waitFor(() => pair.client.listenerCount() === 3);
+
+    link.close(new Error('disposed while opening'));
+
+    await expect(request).rejects.toMatchObject({
+      message: 'disposed while opening',
+    });
+    expect(pair.client.readyState).toBe('closed');
+    expect(pair.client.listenerCount()).toBe(0);
+  });
+
+  it('closes an owned channel produced after disposal', async () => {
+    const pair = createInMemoryChannelPair();
+    let resolveChannel!: (channel: typeof pair.client) => void;
+    const channelPromise = new Promise<typeof pair.client>((resolve) => {
+      resolveChannel = resolve;
+    });
+    const channelFactory = vi.fn(() => channelPromise);
+    const created = createClient({
+      channel: channelFactory,
+      transformer: superjson,
+      closeChannelOnDispose: true,
+    });
+    link = created.link;
+    const request = created.client.hello.query({ name: 'late-channel' });
+    await waitFor(() => channelFactory.mock.calls.length === 1);
+
+    link.close(new Error('disposed before channel creation'));
+    resolveChannel(pair.client);
+
+    await expect(request).rejects.toMatchObject({
+      message: 'disposed before channel creation',
+    });
+    await waitFor(() => pair.client.readyState === 'closed');
   });
 
   it('rejects operations and removes listeners after a handshake timeout', async () => {
@@ -195,6 +278,7 @@ describe('transport failure paths', () => {
         message: 'native send failed',
       }),
     });
+    expect(harness.clientChannel.listenerCount()).toBe(0);
   });
 
   it('closes the server cleanly when a control-frame reply cannot be sent', async () => {

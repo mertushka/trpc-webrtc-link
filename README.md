@@ -11,7 +11,7 @@ The package provides:
 - transformed inputs, outputs, and errors;
 - bounded, fair backpressure handling;
 - browser support using native WebRTC APIs;
-- Node.js support through [`@mertushka/webrtc-node`](https://www.npmjs.com/package/@mertushka/webrtc-node).
+- Node.js support through [`@webrtc-node/webrtc`](https://www.npmjs.com/package/@webrtc-node/webrtc).
 
 It does not perform SDP or ICE signaling, peer discovery, authentication,
 reconnection, or exactly-once delivery.
@@ -25,7 +25,7 @@ npm install @mertushka/trpc-webrtc-link @trpc/client @trpc/server
 Node.js peers also need:
 
 ```sh
-npm install @mertushka/webrtc-node
+npm install @webrtc-node/webrtc
 ```
 
 ## Documentation

@@ -18,6 +18,7 @@ const npmCli = process.env.npm_execpath;
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'trpc-webrtc-link-consumer-'));
 const arguments_ = process.argv.slice(2);
 const runtimeOnly = arguments_.includes('--runtime-only');
+const minimumSupportedTRPCVersion = '11.17.0';
 const tarballArgumentIndex = arguments_.indexOf('--tarball');
 const tarballArgument =
   tarballArgumentIndex === -1 ? undefined : arguments_[tarballArgumentIndex + 1];
@@ -120,13 +121,13 @@ try {
         type: 'module',
         dependencies: {
           '@mertushka/trpc-webrtc-link': `file:${tarball}`,
-          '@trpc/client': '11.17.0',
-          '@trpc/server': '11.17.0',
+          '@trpc/client': minimumSupportedTRPCVersion,
+          '@trpc/server': minimumSupportedTRPCVersion,
         },
         devDependencies: runtimeOnly
           ? undefined
           : {
-              vite: '8.0.16',
+              vite: '8.1.5',
             },
       },
       null,
@@ -192,7 +193,7 @@ document.querySelector('#app').textContent =
     const browserBundle = readJavaScript(join(browserSource, 'dist'));
 
     assert.match(browserBundle, /trpc-webrtc\/1/);
-    assert.doesNotMatch(browserBundle, /@mertushka\/webrtc-node/);
+    assert.doesNotMatch(browserBundle, /@webrtc-node\/webrtc/);
     assert.doesNotMatch(browserBundle, /node:/);
   }
 

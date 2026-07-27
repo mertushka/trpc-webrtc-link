@@ -60,11 +60,7 @@ export interface WebRTCPongFrame extends WebRTCProtocolFrameBase<'pong'> {
 }
 
 export type WebRTCClientFrame =
-  | WebRTCHandshakeFrame
-  | WebRTCRequestFrame
-  | WebRTCCancelFrame
-  | WebRTCPingFrame
-  | WebRTCPongFrame;
+  WebRTCHandshakeFrame | WebRTCRequestFrame | WebRTCCancelFrame | WebRTCPingFrame | WebRTCPongFrame;
 
 export type WebRTCServerFrame =
   | WebRTCReadyFrame
@@ -83,8 +79,7 @@ export interface WebRTCFrameParseError {
 }
 
 export type WebRTCFrameParseResult =
-  | { ok: true; frame: WebRTCProtocolFrame }
-  | { ok: false; error: WebRTCFrameParseError };
+  { ok: true; frame: WebRTCProtocolFrame } | { ok: false; error: WebRTCFrameParseError };
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._~-]{1,128}$/;
 const MAX_PATH_LENGTH = 4096;
@@ -117,7 +112,28 @@ export function getUTF8ByteLength(value: string): number {
   if (typeof TextEncoder !== 'undefined') {
     return new TextEncoder().encode(value).byteLength;
   }
-  return value.length;
+
+  let byteLength = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit <= 0x7f) {
+      byteLength += 1;
+    } else if (codeUnit <= 0x7ff) {
+      byteLength += 2;
+    } else if (
+      codeUnit >= 0xd800 &&
+      codeUnit <= 0xdbff &&
+      index + 1 < value.length &&
+      value.charCodeAt(index + 1) >= 0xdc00 &&
+      value.charCodeAt(index + 1) <= 0xdfff
+    ) {
+      byteLength += 4;
+      index += 1;
+    } else {
+      byteLength += 3;
+    }
+  }
+  return byteLength;
 }
 
 export function parseWebRTCFrame(
@@ -229,5 +245,9 @@ export function parseWebRTCFrame(
 }
 
 export function serializeWebRTCFrame(frame: WebRTCProtocolFrame): string {
-  return JSON.stringify(frame);
+  const serialized = JSON.stringify(frame);
+  if (serialized === undefined) {
+    throw new TypeError('WebRTC frame did not produce JSON text');
+  }
+  return serialized;
 }

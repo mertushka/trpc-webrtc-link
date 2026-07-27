@@ -3,7 +3,7 @@
 This application uses:
 
 - native `RTCPeerConnection` and `RTCDataChannel` in the browser;
-- `@mertushka/webrtc-node` on the Node server;
+- `@webrtc-node/webrtc` on the Node server;
 - a WebSocket only for SDP and ICE signaling;
 - `@mertushka/trpc-webrtc-link` after the data channel is open.
 

@@ -2,6 +2,7 @@
   "name": "trpc-webrtc-link-workspace",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "npm@11.18.0",
   "workspaces": [
     "packages/*",
     "examples/*"
@@ -23,18 +24,22 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run check:package && npm run build && npm audit --audit-level=high"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.3",
-    "@eslint/js": "^10.0.0",
-    "@playwright/test": "^1.60.0",
-    "@types/node": "^25.0.0",
-    "eslint": "^10.0.0",
-    "globals": "^17.0.0",
-    "prettier": "^3.8.0",
-    "publint": "^0.3.21",
-    "typescript": "^6.0.0",
-    "typescript-eslint": "^8.61.0"
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0",
+    "prettier": "^3.9.6",
+    "publint": "^0.3.22",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0"
   },
   "engines": {
     "node": ">=22.18.0"
+  },
+  "allowScripts": {
+    "@webrtc-node/webrtc@0.2.1": true,
+    "esbuild@0.28.1": true
   }
 }

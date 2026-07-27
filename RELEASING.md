@@ -4,6 +4,19 @@ Releases publish through npm Trusted Publishing from
 `.github/workflows/publish.yml`. The workflow uses GitHub OIDC, contains no npm
 token, and produces npm provenance.
 
+## Trusted publisher
+
+The npm package remains `@mertushka/trpc-webrtc-link`; moving this GitHub
+repository does not change its npm scope. Its npm Trusted Publisher must match
+these values before the next release:
+
+- organization or user: `webrtc-node`;
+- repository: `trpc-webrtc-link`;
+- workflow: `publish.yml`.
+
+After any GitHub repository owner or name change, update that publisher in npm
+before creating a release. npm validates the repository identity exactly.
+
 ## Prepare
 
 1. Update the version in `packages/trpc-webrtc-link/package.json`.
