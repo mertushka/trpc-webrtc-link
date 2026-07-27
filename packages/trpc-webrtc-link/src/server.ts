@@ -1,6 +1,7 @@
 import {
   callTRPCProcedure,
   getTRPCErrorFromUnknown,
+  isTrackedEnvelope,
   TRPCError,
   type AnyTRPCRouter,
   type inferRouterContext,
@@ -18,14 +19,22 @@ import {
 } from './channel.js';
 import {
   WebRTCChannelClosedError,
+  WebRTCChannelNotOpenError,
   WebRTCHandshakeTimeoutError,
   WebRTCProtocolError,
 } from './errors.js';
 import {
+  HeartbeatController,
+  normalizeKeepAliveOptions,
+  type WebRTCKeepAliveOptions,
+} from './heartbeat.js';
+import {
   parseWebRTCFrame,
   TRPC_WEBRTC_PROTOCOL,
   type WebRTCClientFrame,
+  type WebRTCConnectionParams,
   type WebRTCErrorFrame,
+  type WebRTCHandshakeFrame,
   type WebRTCRequestFrame,
   type WebRTCRequestId,
 } from './protocol.js';
@@ -36,6 +45,7 @@ type MaybePromise<T> = T | Promise<T>;
 export interface CreateWebRTCContextOptions<TPeer = unknown> {
   channel: RTCDataChannelLike;
   peer: TPeer;
+  connectionParams: WebRTCConnectionParams | null;
   signal: AbortSignal;
 }
 
@@ -59,6 +69,12 @@ export interface CreateWebRTCHandlerOptions<TRouter extends AnyTRPCRouter, TPeer
   onError?: (options: WebRTCHandlerErrorOptions<TRouter, TPeer>) => void;
   onProtocolError?: (error: WebRTCProtocolError) => void;
   backpressure?: WebRTCBackpressureOptions;
+  keepAlive?: WebRTCKeepAliveOptions;
+  /**
+   * Reject additional requests after this many operations are active.
+   * @default Infinity
+   */
+  maxConcurrentOperations?: number;
   /**
    * Time allowed for the channel to open.
    * @default 10000
@@ -76,6 +92,11 @@ export interface WebRTCHandler {
    * Resolves after context creation and protocol negotiation.
    */
   readonly ready: Promise<void>;
+  /**
+   * Ask the client to replace this channel. Applications can call this before
+   * rotating a server or expiring a peer connection.
+   */
+  requestReconnect(reason?: string): Promise<void>;
   /**
    * Abort active procedures and remove all channel listeners.
    */
@@ -141,6 +162,26 @@ async function nextWithAbort(
   });
 }
 
+function normalizeMaxConcurrentOperations(value: number | undefined): number {
+  if (value === undefined || value === Number.POSITIVE_INFINITY) {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RangeError('maxConcurrentOperations must be a positive safe integer or Infinity');
+  }
+  return value;
+}
+
+function injectLastEventId(input: unknown, lastEventId: string | undefined): unknown {
+  if (!lastEventId || (input !== null && input !== undefined && typeof input !== 'object')) {
+    return input;
+  }
+  return {
+    ...(input ?? {}),
+    lastEventId,
+  };
+}
+
 class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRTCHandler {
   readonly #options: CreateWebRTCHandlerOptions<TRouter, TPeer>;
   readonly #router: TRouter;
@@ -152,11 +193,14 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
   readonly #readyDeferred = deferred<void>();
   readonly #openTimeoutMs: number;
   readonly #handshakeTimeoutMs: number;
+  readonly #maxConcurrentOperations: number;
+  readonly #heartbeat: HeartbeatController;
   readonly ready: Promise<void>;
 
   #state: 'awaiting_open' | 'awaiting_handshake' | 'creating_context' | 'ready' | 'closed' =
     'awaiting_open';
   #ctx: inferRouterContext<TRouter> | undefined;
+  #connectionParams: WebRTCConnectionParams | null = null;
   #handshakeTimer: ReturnType<typeof setTimeout> | undefined;
 
   readonly #onMessage = (event: RTCDataChannelMessageEventLike) => {
@@ -185,18 +229,56 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
       options.handshakeTimeoutMs ?? 10_000,
       'handshakeTimeoutMs',
     );
+    this.#maxConcurrentOperations = normalizeMaxConcurrentOperations(
+      options.maxConcurrentOperations,
+    );
     assertReliableOrderedChannel(this.#channel);
     this.#writer = new DataChannelWriter(this.#channel, options.backpressure);
+    this.#heartbeat = new HeartbeatController({
+      keepAlive: normalizeKeepAliveOptions(options.keepAlive, {
+        intervalMs: 30_000,
+        pongTimeoutMs: 5_000,
+      }),
+      sendPing: async (nonce) => {
+        await this.#writer.send(
+          {
+            protocol: TRPC_WEBRTC_PROTOCOL,
+            type: 'ping',
+            nonce,
+          },
+          'control',
+        );
+      },
+      onFailure: (error) => {
+        this.close({
+          closeChannel: true,
+          reason: error,
+        });
+      },
+    });
     this.ready = this.#readyDeferred.promise;
     void this.ready.catch(() => {
-      // Keep rejected readiness promises from becoming unhandled when callers
-      // intentionally rely only on channel closure.
+      // Readiness is optional for callers that rely on channel closure.
     });
 
     this.#channel.addEventListener('message', this.#onMessage);
     this.#channel.addEventListener('close', this.#onClose);
     this.#channel.addEventListener('error', this.#onChannelError);
     void this.#initialize();
+  }
+
+  public async requestReconnect(reason?: string): Promise<void> {
+    if (this.#state !== 'ready') {
+      throw new WebRTCChannelNotOpenError('WebRTC handler is not ready');
+    }
+    await this.#writer.send(
+      {
+        protocol: TRPC_WEBRTC_PROTOCOL,
+        type: 'reconnect',
+        ...(reason ? { reason: reason.slice(0, 1024) } : {}),
+      },
+      'control',
+    );
   }
 
   public close(options: { closeChannel?: boolean; reason?: Error } = {}): void {
@@ -210,6 +292,7 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
       clearTimeout(this.#handshakeTimer);
       this.#handshakeTimer = undefined;
     }
+    this.#heartbeat.stop();
     this.#channel.removeEventListener('message', this.#onMessage);
     this.#channel.removeEventListener('close', this.#onClose);
     this.#channel.removeEventListener('error', this.#onChannelError);
@@ -266,11 +349,17 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
       frame.type === 'result' ||
       frame.type === 'data' ||
       frame.type === 'error' ||
-      frame.type === 'complete'
+      frame.type === 'complete' ||
+      frame.type === 'reconnect'
     ) {
       void this.#fatalProtocolError(`Unexpected client frame: ${frame.type}`);
       return;
     }
+    if (frame.type === 'pong') {
+      this.#heartbeat.pong(frame.nonce);
+      return;
+    }
+    this.#heartbeat.activity();
     void this.#handleClientFrame(frame).catch((cause: unknown) => {
       this.close({
         closeChannel: true,
@@ -295,7 +384,7 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
       return;
     }
     if (frame.type === 'handshake') {
-      await this.#handleHandshake();
+      await this.#handleHandshake(frame);
       return;
     }
     if (this.#state !== 'ready') {
@@ -318,17 +407,19 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
     this.#handleRequest(frame);
   }
 
-  async #handleHandshake(): Promise<void> {
+  async #handleHandshake(frame: WebRTCHandshakeFrame): Promise<void> {
     if (this.#state !== 'awaiting_handshake') {
       await this.#fatalProtocolError('Received a duplicate or unexpected handshake');
       return;
     }
     this.#state = 'creating_context';
+    this.#connectionParams = frame.connectionParams ?? null;
     try {
       this.#ctx = this.#options.createContext
         ? await this.#options.createContext({
             channel: this.#channel,
             peer: this.#peer,
+            connectionParams: this.#connectionParams,
             signal: this.#contextController.signal,
           })
         : (undefined as inferRouterContext<TRouter>);
@@ -347,6 +438,7 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
         this.#handshakeTimer = undefined;
       }
       this.#state = 'ready';
+      this.#heartbeat.start();
       this.#readyDeferred.resolve();
     } catch (cause) {
       if (this.#isClosed()) {
@@ -370,7 +462,16 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
         message: `Duplicate request id ${request.id}`,
       });
       this.#notifyError(error, request.procedureType, request.path, request.input);
-      void this.#sendError(request.id, error, request.procedureType, request.path, request.input);
+      this.#sendRequestError(request, error);
+      return;
+    }
+    if (this.#active.size >= this.#maxConcurrentOperations) {
+      const error = new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: `This WebRTC connection allows at most ${this.#maxConcurrentOperations} concurrent operations`,
+      });
+      this.#notifyError(error, request.procedureType, request.path, request.input);
+      this.#sendRequestError(request, error);
       return;
     }
     const controller = new AbortController();
@@ -385,6 +486,7 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
     let input: unknown = request.input;
     try {
       input = getRouterTransformer(this.#router).input.deserialize(request.input);
+      input = injectLastEventId(input, request.lastEventId);
       const result = await callTRPCProcedure({
         router: this.#router,
         path: request.path,
@@ -449,20 +551,31 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
           if (next === 'aborted' || next.done) {
             break;
           }
-          const data = getRouterTransformer(this.#router).output.serialize(next.value);
+          let output = next.value;
+          let eventId: string | undefined;
+          if (isTrackedEnvelope(output)) {
+            const [id, data] = output;
+            eventId = id;
+            output = {
+              id,
+              data,
+            };
+          }
+          const data = getRouterTransformer(this.#router).output.serialize(output);
           await this.#writer.send(
             {
               protocol: TRPC_WEBRTC_PROTOCOL,
               type: 'data',
               id: request.id,
               ...(data === undefined ? {} : { data }),
+              ...(eventId ? { eventId } : {}),
             },
             request.id,
           );
         }
       } finally {
         if (controller.signal.aborted) {
-          void Promise.resolve(iterator.return?.()).catch(() => undefined);
+          await Promise.resolve(iterator.return?.()).catch(() => undefined);
         }
       }
       if (!controller.signal.aborted) {
@@ -495,6 +608,21 @@ class WebRTCServerHandler<TRouter extends AnyTRPCRouter, TPeer> implements WebRT
       },
       id,
     );
+  }
+
+  #sendRequestError(request: WebRTCRequestFrame, error: TRPCError): void {
+    void this.#sendError(
+      request.id,
+      error,
+      request.procedureType,
+      request.path,
+      request.input,
+    ).catch((cause: unknown) => {
+      this.close({
+        closeChannel: true,
+        reason: cause instanceof Error ? cause : new Error(String(cause)),
+      });
+    });
   }
 
   async #sendError(

@@ -1,5 +1,5 @@
 {
-  "name": "@mertushka/trpc-webrtc-link-example-basic",
+  "name": "@webrtc-node/trpc-webrtc-link-example-basic",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@mertushka/trpc-webrtc-link": "0.1.1",
+    "@webrtc-node/trpc-webrtc-link": "0.2.0",
     "@trpc/client": "^11.18.0",
     "@trpc/server": "^11.18.0",
     "@webrtc-node/webrtc": "^0.2.1",

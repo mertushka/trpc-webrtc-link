@@ -39,15 +39,19 @@ npm run test:e2e
   reason the peer dependency has a tested upper bound. Development tests use
   the newest supported tRPC release, while packed-consumer tests also exercise
   the minimum supported `11.17.0` release.
-- Keep signaling, peer discovery, authentication, reconnection, and framework
-  integrations outside the core transport.
+- Keep SDP/ICE signaling, peer discovery, identity policy, and framework
+  integrations outside the core transport. Reconnection belongs in the
+  transport, but obtaining each replacement channel remains a signaling
+  factory responsibility.
+- Tracked subscriptions must match tRPC's `{ id, data }` runtime contract and
+  preserve the result-level event ID across retry and reconnect.
 
 ## Pull requests
 
 Create a branch from `main`, keep changes focused, and open a pull request.
 Direct pushes to `main` are blocked. Required CI checks must pass before merge.
 
-Update `CHANGELOG.md` for user-facing changes. Do not add secrets or private
+Update `docs/changelog.md` for user-facing changes. Do not add secrets or private
 connection metadata to issues, tests, logs, or examples.
 
 ## Commits

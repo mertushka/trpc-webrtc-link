@@ -1,7 +1,7 @@
 {
-  "name": "@mertushka/trpc-webrtc-link",
-  "version": "0.1.1",
-  "description": "A tRPC v11 terminating client link and server adapter for established RTCDataChannels.",
+  "name": "@webrtc-node/trpc-webrtc-link",
+  "version": "0.2.0",
+  "description": "A complete tRPC v11 client link and server transport for WebRTC RTCDataChannels.",
   "keywords": [
     "trpc",
     "webrtc",
@@ -44,6 +44,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "prepack": "tsdown --logLevel silent",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run --config vitest.unit.config.ts --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",

@@ -5,8 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        The core package intentionally excludes signaling, peer discovery, reconnection,
-        React bindings, batching, and unrelated protocol multiplexing.
+        The core package intentionally excludes signaling, peer discovery, identity policy,
+        binary codecs, batching, and unrelated protocol multiplexing. Reconnection belongs
+        in the transport while replacement-channel creation belongs in application signaling.
 
   - type: textarea
     id: problem

@@ -94,7 +94,7 @@ try {
         '--pack-destination',
         temporaryDirectory,
         '--workspace',
-        '@mertushka/trpc-webrtc-link',
+        '@webrtc-node/trpc-webrtc-link',
       ],
       {
         cwd: root,
@@ -120,7 +120,7 @@ try {
         private: true,
         type: 'module',
         dependencies: {
-          '@mertushka/trpc-webrtc-link': `file:${tarball}`,
+          '@webrtc-node/trpc-webrtc-link': `file:${tarball}`,
           '@trpc/client': minimumSupportedTRPCVersion,
           '@trpc/server': minimumSupportedTRPCVersion,
         },
@@ -142,7 +142,7 @@ import {
   TRPC_WEBRTC_PROTOCOL,
   createWebRTCHandler,
   createWebRTCLink,
-} from '@mertushka/trpc-webrtc-link';
+} from '@webrtc-node/trpc-webrtc-link';
 
 assert.equal(TRPC_WEBRTC_PROTOCOL, 'trpc-webrtc/1');
 assert.equal(typeof createWebRTCHandler, 'function');
@@ -157,7 +157,7 @@ const {
   TRPC_WEBRTC_PROTOCOL,
   createWebRTCHandler,
   createWebRTCLink,
-} = require('@mertushka/trpc-webrtc-link');
+} = require('@webrtc-node/trpc-webrtc-link');
 
 assert.equal(TRPC_WEBRTC_PROTOCOL, 'trpc-webrtc/1');
 assert.equal(typeof createWebRTCHandler, 'function');
@@ -175,7 +175,7 @@ assert.equal(typeof createWebRTCLink, 'function');
 import {
   TRPC_WEBRTC_PROTOCOL,
   createWebRTCLink,
-} from '@mertushka/trpc-webrtc-link';
+} from '@webrtc-node/trpc-webrtc-link';
 
 document.querySelector('#app').textContent =
   TRPC_WEBRTC_PROTOCOL + ':' + typeof createWebRTCLink;

@@ -4,13 +4,14 @@ import { z } from 'zod';
 
 export interface AppContext {
   peerId: string;
+  clientName: string;
 }
 
 const t = initTRPC.context<AppContext>().create();
 let counter = 0;
 
 export const appRouter = t.router({
-  hello: t.procedure.query(({ ctx }) => `Hello from Node peer ${ctx.peerId}`),
+  hello: t.procedure.query(({ ctx }) => `Hello from Node peer ${ctx.peerId} (${ctx.clientName})`),
   counter: t.router({
     increment: t.procedure.mutation(() => {
       counter += 1;

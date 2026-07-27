@@ -1,52 +1,58 @@
-# @mertushka/trpc-webrtc-link
+# @webrtc-node/trpc-webrtc-link
 
-A tRPC v11 terminating client link and server adapter that transport queries,
-mutations, and subscriptions over an already established `RTCDataChannel`.
+A tRPC v11 terminating client link and server handler for ordered, reliable
+WebRTC `RTCDataChannel` connections.
 
-This package handles tRPC framing, execution, cancellation, error shaping, and
-backpressure. It does **not** perform SDP/ICE signaling, peer discovery,
-reconnection, or authentication.
+The package transports concurrent queries, mutations, and subscriptions. It
+supports cancellation, transformers, custom error formatting, `tracked()`
+events, reconnect and subscription resumption, connection state, connection
+parameters, keep-alive, frame limits, and fair backpressure.
 
-## Runtime requirements
+SDP/ICE signaling remains application-owned: the package consumes data
+channels but does not create peer connections or decide who a peer is.
+
+## Requirements
 
 - Node.js 20.19 or newer;
 - TypeScript 5.7.2 or newer;
-- matching tRPC v11 `@trpc/client` and `@trpc/server` versions;
+- matching `@trpc/client` and `@trpc/server` versions in the supported range
+  `>=11.17.0 <11.19.0`;
 - an ordered, reliable `RTCDataChannel`.
 
-## Installation
+Install the transport and tRPC peers:
 
 ```sh
-npm install @mertushka/trpc-webrtc-link @trpc/client @trpc/server
+npm install @webrtc-node/trpc-webrtc-link @trpc/client @trpc/server
 ```
 
-For Node WebRTC peers:
+Node.js peers also need the current WebRTC implementation:
 
 ```sh
 npm install @webrtc-node/webrtc
 ```
 
-`@webrtc-node/webrtc` is not imported or bundled by this package. Browser
-applications use the browser's native `RTCPeerConnection` and
-`RTCDataChannel`.
+The transport never imports or bundles `@webrtc-node/webrtc`; browsers use
+their native WebRTC APIs.
 
-## Client
+## Basic client
 
-Pass an open channel or an async factory. The factory is evaluated lazily on
-the first tRPC operation.
+An existing channel negotiates immediately, even before the first tRPC
+operation. Await `connect()` when application startup depends on readiness.
 
 ```ts
 import { createTRPCClient } from '@trpc/client';
-import { createWebRTCLink } from '@mertushka/trpc-webrtc-link';
-import type { AppRouter } from './server';
+import { createWebRTCLink } from '@webrtc-node/trpc-webrtc-link';
+import type { AppRouter } from './router';
 
 const link = createWebRTCLink<AppRouter>({
-  channel: () => connectedDataChannel,
-  handshakeTimeoutMs: 10_000,
-  backpressure: {
-    highWatermark: 1024 * 1024,
-    lowWatermark: 256 * 1024,
-    queueLimit: 1024,
+  channel,
+  connectionParams: {
+    authorization: `Bearer ${accessToken}`,
+  },
+  keepAlive: {
+    enabled: true,
+    intervalMs: 5_000,
+    pongTimeoutMs: 1_000,
   },
 });
 
@@ -54,20 +60,25 @@ const client = createTRPCClient<AppRouter>({
   links: [link],
 });
 
-const greeting = await client.hello.query();
+await link.connect();
+
+const greeting = await client.greeting.query();
 const count = await client.counter.increment.mutate();
 
-const subscription = client.clock.subscribe(undefined, {
-  onData(value) {
-    console.log(value);
+const subscription = client.events.subscribe(undefined, {
+  onData(event) {
+    console.log(event);
+  },
+  onConnectionStateChange(state) {
+    console.log(state.state); // idle, connecting, or pending
   },
 });
 
-subscription.unsubscribe(); // sends cancellation to the server
-link.close(); // rejects pending operations and removes listeners
+subscription.unsubscribe();
+link.close();
 ```
 
-When the router uses a transformer, pass the same transformer to the link:
+If the router has a transformer, provide the matching transformer to the link:
 
 ```ts
 const link = createWebRTCLink<AppRouter>({
@@ -76,173 +87,244 @@ const link = createWebRTCLink<AppRouter>({
 });
 ```
 
-The link returns remote tRPC errors and transport failures as
-`TRPCClientError`. Transport failures include `meta.transport === "webrtc"` and
-may include a `meta.transportCode`.
+The link is a standard tRPC terminating link. It composes with `loggerLink`,
+`retryLink`, and `splitLink`, and works with vanilla tRPC, TanStack Query, and
+the tRPC React integrations without package-specific bindings.
 
-`handshakeTimeoutMs` is one deadline for channel opening and protocol
-negotiation after an async channel factory resolves. Timeout values must be
-positive integer milliseconds.
+## Server handler
 
-## Server
-
-The server adapter creates context once per attached channel. Context receives
-the channel, typed application peer metadata, and a signal that aborts when the
-handler or channel closes.
+Create one handler for every server-side data channel. Context is created once
+per channel and receives typed peer metadata, connection parameters, and a
+signal that aborts when the channel or handler closes.
 
 ```ts
-import { createWebRTCHandler } from '@mertushka/trpc-webrtc-link';
-import { RTCPeerConnection } from '@webrtc-node/webrtc';
-import { appRouter } from './router';
+import { createWebRTCHandler } from '@webrtc-node/trpc-webrtc-link';
+import { TRPCError } from '@trpc/server';
 
-const peerConnection = new RTCPeerConnection();
+const handler = createWebRTCHandler({
+  router: appRouter,
+  channel,
+  peer: {
+    userId: authenticatedPeer.userId,
+    peerConnection,
+  },
+  createContext({ peer, connectionParams, signal }) {
+    if (connectionParams?.authorization !== expectedAuthorization) {
+      throw new TRPCError({ code: 'UNAUTHORIZED' });
+    }
+    return {
+      userId: peer.userId,
+      signal,
+    };
+  },
+  keepAlive: {
+    enabled: true,
+    intervalMs: 30_000,
+    pongTimeoutMs: 5_000,
+  },
+  maxConcurrentOperations: 100,
+  onError({ error, path }) {
+    console.error(path, error);
+  },
+});
 
-peerConnection.addEventListener('datachannel', (event) => {
-  const handler = createWebRTCHandler({
-    router: appRouter,
-    channel: event.channel,
-    peer: {
-      peerConnection,
-      userId: 'user-123',
-    },
-    openTimeoutMs: 10_000,
-    handshakeTimeoutMs: 10_000,
-    createContext({ channel, peer, signal }) {
-      return {
-        channel,
-        userId: peer.userId,
-        signal,
-      };
-    },
-    onError({ error, path }) {
-      console.error(path, error);
-    },
-  });
+await handler.ready;
 
-  void handler.ready;
+// Before rotating a peer connection or server:
+await handler.requestReconnect('server rotation');
 
-  // Later:
-  // handler.close({ closeChannel: true });
+// During final cleanup:
+handler.close({ closeChannel: true });
+```
+
+`close()` aborts procedures and subscription iterators, rejects queued writes,
+and removes all listeners. The channel is only closed when
+`closeChannel: true` is supplied.
+
+## Signaling and reconnect
+
+Use a channel factory when signaling can establish replacement peer
+connections. The factory is called once per attempt and must return a fresh
+channel. The remote application must attach a new `createWebRTCHandler()` to
+the matching server channel.
+
+```ts
+const link = createWebRTCLink<AppRouter>({
+  channel: async ({ signal, attempt, cause }) => {
+    console.log({ attempt, cause });
+    return signaling.createDataChannel({ signal });
+  },
+  reconnect: {
+    enabled: true,
+    maxAttempts: 8,
+    retryDelayMs: (attempt) => (attempt === 0 ? 0 : Math.min(1_000 * 2 ** attempt, 30_000)),
+    shouldRetry: ({ error }) => !isPermanentSignalingError(error),
+  },
+  connectionParams: () => ({
+    authorization: `Bearer ${getCurrentAccessToken()}`,
+  }),
 });
 ```
 
-`close()` aborts active procedures, closes active subscription iterators,
-rejects queued writes, and removes listeners. It leaves the underlying channel
-open unless `closeChannel: true` is passed. `openTimeoutMs` bounds channel
-opening; `handshakeTimeoutMs` then bounds protocol negotiation and context
-creation.
+Connection parameters are evaluated again for each attempt. The factory's
+signal is aborted when an attempt times out, is replaced, or the link closes.
 
-## Signaling
+With automatic reconnect enabled:
 
-Signaling is an application responsibility. Exchange SDP descriptions and ICE
-candidates using WebSocket, HTTP, QR codes, or another authenticated signaling
-system. After the data channel opens, pass it to `createWebRTCLink` or
-`createWebRTCHandler`.
+- active subscriptions remain registered;
+- their last delivered tracked event ID is sent to the new server;
+- queries and mutations interrupted after transmission fail, allowing
+  `retryLink` or the consuming framework to decide whether replay is safe;
+- subscription observers receive tRPC connection states.
 
-The runnable
-[`examples/basic`](https://github.com/webrtc-node/trpc-webrtc-link/tree/main/examples/basic)
-application uses a WebSocket only for SDP/ICE. tRPC messages never pass through
-the signaling server.
+Automatic reconnect requires a factory. Without automatic reconnect, the same
+factory is still reusable by `retryLink` or a later operation after a channel
+failure.
 
-## Protocol
+Set `lazy: true` to delay a factory until `connect()` or the first operation.
+Direct channels always negotiate immediately so a server handshake timeout
+cannot close an otherwise idle connection.
 
-The exported protocol identifier is:
+The extended link exposes:
 
 ```ts
-TRPC_WEBRTC_PROTOCOL === 'trpc-webrtc/1';
+await link.connect();
+await link.reconnect();
+
+console.log(link.connectionState);
+
+const unsubscribe = link.subscribeConnectionState((state) => {
+  console.log(state);
+});
+
+unsubscribe();
+link.close();
 ```
 
-Version 1 uses JSON text frames:
+## Tracked subscriptions
 
-| Frame           | Direction        | Purpose                               |
-| --------------- | ---------------- | ------------------------------------- |
-| `handshake`     | client to server | Negotiate `trpc-webrtc/1`             |
-| `ready`         | server to client | Context exists and requests may start |
-| `request`       | client to server | Query, mutation, or subscription      |
-| `result`        | server to client | Unary value or subscription start     |
-| `data`          | server to client | Subscription value                    |
-| `error`         | server to client | Transformed tRPC error shape          |
-| `complete`      | server to client | Normal operation completion           |
-| `cancel`        | client to server | Abort a server operation              |
-| `ping` / `pong` | either direction | Application heartbeat primitives      |
+The transport implements tRPC's complete `tracked()` contract. Clients receive
+the inferred `{ id, data }` value, while the result-level ID is retained for
+`retryLink` and channel replacement.
 
-Every operation has an opaque collision-resistant string ID. The runtime
-validates inbound frame shape, protocol version, IDs, and operation
-transitions. Malformed or version-mismatched connection frames close the
-channel. Unknown operation IDs and other correlatable state errors are reported
-through `onProtocolError` without throwing from event listeners.
+```ts
+import { initTRPC, tracked } from '@trpc/server';
+import { z } from 'zod';
 
-The protocol requires an ordered, reliable channel. Version 1 does not add
-packet reordering or retransmission above SCTP.
+const t = initTRPC.create();
 
-## Cancellation
+const router = t.router({
+  events: t.procedure
+    .input(
+      z
+        .object({
+          lastEventId: z.string().nullish(),
+        })
+        .optional(),
+    )
+    .subscription(async function* ({ input, signal }) {
+      for await (const event of readEventsAfter(input?.lastEventId, signal)) {
+        yield tracked(event.id, event);
+      }
+    }),
+});
+```
 
-- An `AbortSignal` passed to a query or mutation sends `cancel`.
-- Subscription `unsubscribe()` sends `cancel`.
-- The server passes an operation-specific signal to tRPC procedures.
-- Channel closure aborts all server operations and rejects all client
-  operations.
+```ts
+client.events.subscribe(undefined, {
+  onData(event) {
+    console.log(event.id, event.data);
+  },
+});
+```
 
-Cancellation is best effort if the data channel closes before the cancel frame
-is delivered. The package does not claim exactly-once execution.
+For operation-level errors, place tRPC's `retryLink` before this terminating
+link. `retryLink` automatically injects the last known event ID into the next
+subscription input.
 
-## Backpressure
+## Cancellation and delivery
 
-Both endpoints respect `RTCDataChannel.bufferedAmount`.
+- Query and mutation `AbortSignal` cancellation sends a cancel frame.
+- Subscription `unsubscribe()` sends a cancel frame.
+- Every server procedure receives an operation-specific signal.
+- Closing a channel aborts all server operations.
 
-- Writes pause above `highWatermark`.
-- The writer sets `bufferedAmountLowThreshold` and resumes after
-  `bufferedamountlow`.
-- Per-operation queues are drained round-robin so one subscription cannot
-  indefinitely starve other calls.
-- `queueLimit` bounds queued frame count.
-- An enqueue above the limit fails with `WebRTCQueueOverflowError`.
-- Frames are never silently dropped.
+Cancellation is best effort if the channel disappears before the frame is
+delivered. Mutations are not automatically replayed, and the package does not
+claim exactly-once execution.
 
-Defaults:
+## Backpressure and limits
+
+Both endpoints use `RTCDataChannel.bufferedAmount`. Writes pause above the high
+watermark, resume after `bufferedamountlow`, and drain operation queues
+round-robin so a busy subscription cannot starve other calls.
 
 ```ts
 {
-  highWatermark: 1024 * 1024,
-  lowWatermark: 256 * 1024,
-  queueLimit: 1024,
-  maxMessageBytes: 1024 * 1024,
+  backpressure: {
+    highWatermark: 1024 * 1024,
+    lowWatermark: 256 * 1024,
+    queueLimit: 1024,
+    maxMessageBytes: 1024 * 1024,
+  },
 }
 ```
 
-## tRPC compatibility
+Frames are never silently dropped. Queue overflow fails the affected operation
+with `WebRTCQueueOverflowError`. Configure `maxMessageBytes` at or below the
+effective SCTP message size used by both peers. Servers can additionally set
+`maxConcurrentOperations`.
 
-The supported peer range is `>=11.17.0 <11.19.0`. Install matching
-`@trpc/client` and `@trpc/server` versions. CI tests the newest supported
-version directly and the minimum supported version as a packed consumer.
+## Errors and lifecycle callbacks
 
-## Security
+Remote tRPC errors and transport failures surface as `TRPCClientError`.
+Transport failures include:
 
-- WebRTC encrypts the peer connection, but applications must authenticate and
-  authorize signaling participants.
-- Protect signaling messages against tampering and peer substitution.
-- Validate all procedure input with tRPC validators.
-- Treat `createContext` peer metadata as trusted only if the signaling layer
-  established it securely.
-- Configure queue and frame limits for the expected workload.
-- Do not expose unrestricted procedures merely because the channel is
-  peer-to-peer.
+```ts
+error.meta?.transport === 'webrtc';
+error.meta?.transportCode;
+```
 
-## Limitations
+Transport codes distinguish channel closure, failed opening, handshake
+timeout, keep-alive timeout, protocol errors, queue overflow, exhausted
+reconnect attempts, and unreliable channels.
 
-The package does not include:
+Client options include `onOpen`, `onClose`, `onError`,
+`onConnectionStateChange`, and `onProtocolError`. Server options include
+`onError` and `onProtocolError`. Exceptions thrown by lifecycle callbacks do
+not break transport event processing.
 
-- SDP or ICE signaling;
-- reconnection or subscription resumption;
-- request batching;
+## Protocol and security
+
+The wire identifier is `trpc-webrtc/1`. It uses validated JSON text frames over
+an ordered, reliable SCTP stream. See the
+[protocol reference](https://github.com/webrtc-node/trpc-webrtc-link/blob/main/docs/protocol.md)
+for frame details.
+
+WebRTC encrypts transport traffic, but applications must still:
+
+- authenticate and authorize signaling participants;
+- protect SDP and ICE exchange against peer substitution;
+- treat `peer` metadata as trusted only when signaling established it;
+- validate every procedure input;
+- use short-lived connection parameters where appropriate;
+- set queue, message, and concurrency limits for untrusted peers.
+
+## Deliberate non-goals
+
+The package does not provide:
+
+- SDP/ICE signaling or peer discovery;
+- a specific authentication system;
+- request batching (operations are already concurrently multiplexed);
 - binary codecs;
-- React bindings;
-- peer discovery;
-- multiplexing unrelated protocols;
-- exactly-once delivery guarantees.
+- unrelated-protocol multiplexing;
+- exactly-once delivery.
 
 ## Support
 
-- [Report bugs or request features](https://github.com/webrtc-node/trpc-webrtc-link/issues)
-- [Report vulnerabilities privately](https://github.com/webrtc-node/trpc-webrtc-link/security/advisories/new)
-- [Review released changes](https://github.com/webrtc-node/trpc-webrtc-link/blob/main/CHANGELOG.md)
+- [Runnable browser-to-Node example](https://github.com/webrtc-node/trpc-webrtc-link/tree/main/examples/basic)
+- [Connection lifecycle guide](https://github.com/webrtc-node/trpc-webrtc-link/blob/main/docs/lifecycle.md)
+- [Changelog](https://github.com/webrtc-node/trpc-webrtc-link/blob/main/docs/changelog.md)
+- [Issues](https://github.com/webrtc-node/trpc-webrtc-link/issues)
+- [Private vulnerability reports](https://github.com/webrtc-node/trpc-webrtc-link/security/advisories/new)

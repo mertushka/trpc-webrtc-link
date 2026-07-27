@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-const exampleWorkspace = '@mertushka/trpc-webrtc-link-example-basic';
+const exampleWorkspace = '@webrtc-node/trpc-webrtc-link-example-basic';
 
 export default defineConfig({
   testDir: './examples/basic/e2e',
