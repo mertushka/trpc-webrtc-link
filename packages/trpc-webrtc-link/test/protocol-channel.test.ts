@@ -4,9 +4,11 @@ import {
   assertReliableOrderedChannel,
   DataChannelWriter,
   normalizeBackpressureOptions,
+  normalizeTimeoutMs,
   waitForDataChannelOpen,
 } from '../src/channel.js';
 import {
+  getUTF8ByteLength,
   parseWebRTCFrame,
   TRPC_WEBRTC_PROTOCOL,
   WebRTCChannelClosedError,
@@ -24,6 +26,15 @@ describe('protocol validation', () => {
   afterEach(() => {
     harness?.close();
     harness = undefined;
+    vi.unstubAllGlobals();
+  });
+
+  it('counts UTF-8 bytes without relying on TextEncoder', () => {
+    const value = 'A¢€😀\ud800';
+
+    expect(getUTF8ByteLength(value)).toBe(13);
+    vi.stubGlobal('TextEncoder', undefined);
+    expect(getUTF8ByteLength(value)).toBe(13);
   });
 
   it('rejects unsupported protocol versions', () => {
@@ -300,6 +311,16 @@ describe('DataChannelWriter', () => {
         data: 'x'.repeat(100),
       }),
     ).rejects.toThrow('exceeds the 64 byte limit');
+    await expect(
+      writer.send({
+        protocol: TRPC_WEBRTC_PROTOCOL,
+        type: 'data',
+        id: 'undefined-json',
+        toJSON() {
+          return undefined;
+        },
+      } as WebRTCDataFrame),
+    ).rejects.toThrow('not JSON serializable');
 
     writer.close();
   });
@@ -331,6 +352,13 @@ describe('DataChannelWriter', () => {
 });
 
 describe('RTCDataChannel setup', () => {
+  it.each([0, -1, 1.5, Number.POSITIVE_INFINITY, 2_147_483_648])(
+    'rejects invalid timeout %s',
+    (timeoutMs) => {
+      expect(() => normalizeTimeoutMs(timeoutMs, 'testTimeoutMs')).toThrow('testTimeoutMs');
+    },
+  );
+
   it('waits for a connecting channel and removes temporary listeners', async () => {
     const { client } = createInMemoryChannelPair();
     client.readyState = 'connecting';
@@ -341,6 +369,35 @@ describe('RTCDataChannel setup', () => {
     client.dispatch('open', { type: 'open' });
 
     await opening;
+    expect(client.listenerCount()).toBe(0);
+  });
+
+  it('handles a channel that opens while listeners are being attached', async () => {
+    const { client } = createInMemoryChannelPair();
+    let readyStateReads = 0;
+    Object.defineProperty(client, 'readyState', {
+      configurable: true,
+      get() {
+        readyStateReads += 1;
+        return readyStateReads === 1 ? 'connecting' : 'open';
+      },
+    });
+
+    await waitForDataChannelOpen(client, 100);
+
+    expect(client.listenerCount()).toBe(0);
+  });
+
+  it('stops waiting when the caller aborts', async () => {
+    const { client } = createInMemoryChannelPair();
+    client.readyState = 'connecting';
+    const controller = new AbortController();
+    const reason = new Error('setup cancelled');
+
+    const opening = waitForDataChannelOpen(client, 1_000, controller.signal);
+    controller.abort(reason);
+
+    await expect(opening).rejects.toBe(reason);
     expect(client.listenerCount()).toBe(0);
   });
 

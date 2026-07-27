@@ -74,6 +74,17 @@ const DEFAULT_BACKPRESSURE_OPTIONS: NormalizedBackpressureOptions = {
   maxMessageBytes: 1024 * 1024,
 };
 
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+export function normalizeTimeoutMs(value: number, optionName: string): number {
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_TIMER_DELAY_MS) {
+    throw new RangeError(
+      `${optionName} must be a positive safe integer no greater than ${MAX_TIMER_DELAY_MS}`,
+    );
+  }
+  return value;
+}
+
 export function normalizeBackpressureOptions(
   options: WebRTCBackpressureOptions | undefined,
 ): NormalizedBackpressureOptions {
@@ -113,7 +124,12 @@ export function assertReliableOrderedChannel(channel: RTCDataChannelLike): void 
 export async function waitForDataChannelOpen(
   channel: RTCDataChannelLike,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<void> {
+  normalizeTimeoutMs(timeoutMs, 'timeoutMs');
+  if (signal?.aborted) {
+    throw getAbortReason(signal);
+  }
   if (channel.readyState === 'open') {
     return;
   }
@@ -127,6 +143,7 @@ export async function waitForDataChannelOpen(
       channel.removeEventListener('open', onOpen);
       channel.removeEventListener('close', onClose);
       channel.removeEventListener('error', onError);
+      signal?.removeEventListener('abort', onAbort);
     };
     const onOpen = () => {
       cleanup();
@@ -144,6 +161,10 @@ export async function waitForDataChannelOpen(
         }),
       );
     };
+    const onAbort = () => {
+      cleanup();
+      reject(getAbortReason(signal!));
+    };
     const timeout = setTimeout(() => {
       cleanup();
       reject(new WebRTCChannelNotOpenError(`RTCDataChannel did not open within ${timeoutMs}ms`));
@@ -152,6 +173,24 @@ export async function waitForDataChannelOpen(
     channel.addEventListener('open', onOpen);
     channel.addEventListener('close', onClose);
     channel.addEventListener('error', onError);
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    if (signal?.aborted) {
+      onAbort();
+    } else if (channel.readyState === 'open') {
+      onOpen();
+    } else if (channel.readyState === 'closing' || channel.readyState === 'closed') {
+      onClose();
+    }
+  });
+}
+
+function getAbortReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) {
+    return signal.reason;
+  }
+  return new WebRTCChannelClosedError('Waiting for RTCDataChannel opening was aborted', {
+    cause: signal.reason,
   });
 }
 
@@ -162,6 +201,7 @@ export class DataChannelWriter {
   readonly #keyOrder: string[] = [];
   readonly #previousLowThreshold: number;
   #queuedCount = 0;
+  #pumpScheduled = false;
   #pumping = false;
   #closedError: Error | null = null;
 
@@ -270,10 +310,12 @@ export class DataChannelWriter {
   }
 
   #schedulePump(): void {
-    if (this.#pumping || this.#closedError) {
+    if (this.#pumpScheduled || this.#pumping || this.#closedError) {
       return;
     }
+    this.#pumpScheduled = true;
     queueMicrotask(() => {
+      this.#pumpScheduled = false;
       this.#pump();
     });
   }

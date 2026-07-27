@@ -2,11 +2,12 @@
 
 ## Setup
 
-Building requires Node.js 22.18 or newer. The browser end-to-end test also
+Building requires Node.js 22.18 or newer and the npm version declared by
+`packageManager` in the root `package.json`. The browser end-to-end test also
 requires Google Chrome Stable.
 
 ```sh
-npm install
+npm ci
 npm run check
 ```
 
@@ -32,10 +33,12 @@ npm run test:e2e
 ## Architecture constraints
 
 - Browser-facing package source must use the structural `RTCDataChannelLike`
-  interface and must not import or bundle `@mertushka/webrtc-node`.
+  interface and must not import or bundle `@webrtc-node/webrtc`.
 - The package prefers public tRPC APIs. The required
   `router._def._config` access is isolated in `src/trpc-internals.ts` and is the
-  reason the peer dependency remains pinned to `~11.17.0`.
+  reason the peer dependency has a tested upper bound. Development tests use
+  the newest supported tRPC release, while packed-consumer tests also exercise
+  the minimum supported `11.17.0` release.
 - Keep signaling, peer discovery, authentication, reconnection, and framework
   integrations outside the core transport.
 

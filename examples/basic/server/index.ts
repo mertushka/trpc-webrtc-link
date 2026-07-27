@@ -5,7 +5,7 @@ import {
   type RTCDataChannelEvent,
   type RTCIceCandidateInit,
   type RTCPeerConnectionIceEvent,
-} from '@mertushka/webrtc-node';
+} from '@webrtc-node/webrtc';
 import {
   createWebRTCHandler,
   type RTCDataChannelLike,
