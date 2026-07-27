@@ -20,6 +20,15 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Keep development types aligned with the Node.js 24 CI/build target.
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
+      # TypeScript 7 is outside typescript-eslint's currently supported range.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
     commit-message:
       prefix: build(deps)
 
