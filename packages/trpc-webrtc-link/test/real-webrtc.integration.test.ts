@@ -113,6 +113,7 @@ describe('real @webrtc-node/webrtc integration', () => {
       contextCreations: 0,
       subscriptionCancellations: 0,
       queryCancellations: 0,
+      trackedInputs: [],
     };
 
     const handler: WebRTCHandler = createWebRTCHandler({
@@ -161,6 +162,29 @@ describe('real @webrtc-node/webrtc integration', () => {
       );
     });
     expect(values).toEqual([0, 1, 2]);
+
+    const trackedValues: Array<{ id: string; data: { value: number; createdAt: Date } }> = [];
+    await new Promise<void>((resolve, reject) => {
+      client.trackedClock.subscribe(
+        { count: 1, stayOpen: false },
+        {
+          onData(value) {
+            trackedValues.push(value);
+          },
+          onError: reject,
+          onComplete: resolve,
+        },
+      );
+    });
+    expect(trackedValues).toEqual([
+      {
+        id: 'event-1',
+        data: {
+          value: 1,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      },
+    ]);
 
     const subscription = client.clock.subscribe(
       { count: 100, waitMs: 5 },

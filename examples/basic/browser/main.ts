@@ -3,7 +3,7 @@ import {
   createWebRTCLink,
   type RTCDataChannelLike,
   type WebRTCLink,
-} from '@mertushka/trpc-webrtc-link';
+} from '@webrtc-node/trpc-webrtc-link';
 import type { Unsubscribable } from '@trpc/server/observable';
 import type { AppRouter } from '../shared/router.js';
 import { parseSignalingMessage, type SignalingMessage } from '../shared/signaling.js';
@@ -107,10 +107,19 @@ async function connect(): Promise<void> {
 
   link = createWebRTCLink<AppRouter>({
     channel: channel as RTCDataChannelLike,
+    connectionParams: {
+      client: 'browser-example',
+    },
+    keepAlive: {
+      enabled: true,
+      intervalMs: 15_000,
+      pongTimeoutMs: 5_000,
+    },
   });
   client = createTRPCClient<AppRouter>({
     links: [link],
   });
+  await link.connect();
 
   status.textContent = 'Connected';
   for (const button of [helloButton, incrementButton, clockButton]) {
@@ -147,6 +156,9 @@ clockButton.addEventListener('click', () => {
       },
       onError(error) {
         log({ error: error.message });
+      },
+      onConnectionStateChange(value) {
+        log({ connection: value.state });
       },
     },
   );

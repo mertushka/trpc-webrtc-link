@@ -41,7 +41,7 @@ jobs:
             test-results/
           if-no-files-found: ignore
       - run: mkdir package-artifact
-      - run: npm pack --workspace @mertushka/trpc-webrtc-link --pack-destination package-artifact
+      - run: npm pack --workspace @webrtc-node/trpc-webrtc-link --pack-destination package-artifact
       - uses: actions/upload-artifact@v7
         with:
           name: npm-package

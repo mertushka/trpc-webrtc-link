@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { createTRPCClient, type TRPCClient } from '@trpc/client';
-import { initTRPC, TRPCError } from '@trpc/server';
+import { initTRPC, tracked, TRPCError } from '@trpc/server';
+import { observable } from '@trpc/server/observable';
 import superjson from 'superjson';
 import { z } from 'zod';
 import {
@@ -16,6 +17,7 @@ export interface TestState {
   contextCreations: number;
   subscriptionCancellations: number;
   queryCancellations: number;
+  trackedInputs: Array<string | null>;
 }
 
 export interface TestContext {
@@ -25,6 +27,15 @@ export interface TestContext {
 
 const t = initTRPC.context<TestContext>().create({
   transformer: superjson,
+  errorFormatter({ shape }) {
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        transport: 'webrtc-test' as const,
+      },
+    };
+  },
 });
 
 export const testRouter = t.router({
@@ -85,6 +96,77 @@ export const testRouter = t.router({
         }
       }
     }),
+  observableClock: t.procedure
+    .input(z.object({ count: z.number().int().min(1) }))
+    .subscription(({ input }) =>
+      observable<number>((observer) => {
+        let stopped = false;
+        let value = 0;
+        const emit = () => {
+          if (stopped) {
+            return;
+          }
+          if (value >= input.count) {
+            observer.complete();
+            return;
+          }
+          observer.next(value);
+          value += 1;
+          queueMicrotask(emit);
+        };
+        queueMicrotask(emit);
+        return () => {
+          stopped = true;
+        };
+      }),
+    ),
+  trackedClock: t.procedure
+    .input(
+      z.object({
+        count: z.number().int().min(1).default(1),
+        stayOpen: z.boolean().default(false),
+        lastEventId: z.string().nullish(),
+      }),
+    )
+    .subscription(async function* ({ input, signal, ctx }) {
+      ctx.state.trackedInputs.push(input.lastEventId ?? null);
+      const previous = input.lastEventId?.match(/^event-(\d+)$/)?.[1];
+      const start = previous ? Number(previous) + 1 : 1;
+      for (let index = start; index < start + input.count; index += 1) {
+        yield tracked(`event-${index}`, {
+          value: index,
+          createdAt: new Date(`2026-01-${String(index).padStart(2, '0')}T00:00:00.000Z`),
+        });
+      }
+      if (input.stayOpen) {
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) {
+            resolve();
+            return;
+          }
+          signal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }
+    }),
+  recoveringTracked: t.procedure
+    .input(
+      z
+        .object({
+          lastEventId: z.string().nullish(),
+        })
+        .optional(),
+    )
+    .subscription(async function* ({ input, ctx }) {
+      ctx.state.trackedInputs.push(input?.lastEventId ?? null);
+      if (!input?.lastEventId) {
+        yield tracked('event-1', { value: 1 });
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'retry this subscription',
+        });
+      }
+      yield tracked('event-2', { value: 2 });
+    }),
 });
 
 export type TestRouter = typeof testRouter;
@@ -111,6 +193,7 @@ export async function createTestHarness(
     contextCreations: 0,
     subscriptionCancellations: 0,
     queryCancellations: 0,
+    trackedInputs: [],
   };
   const handler = createWebRTCHandler({
     router: testRouter,

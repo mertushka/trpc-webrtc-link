@@ -1,8 +1,15 @@
 export {
   createWebRTCLink,
   type CreateWebRTCLinkOptions,
+  type WebRTCDataChannelFactory,
+  type WebRTCDataChannelFactoryOptions,
   type WebRTCDataChannelSource,
   type WebRTCLink,
+  type WebRTCLinkCloseOptions,
+  type WebRTCLinkOpenOptions,
+  type WebRTCLinkState,
+  type WebRTCLazyOptions,
+  type WebRTCReconnectOptions,
 } from './client.js';
 export {
   type RTCDataChannelEventLike,
@@ -16,12 +23,15 @@ export {
   WebRTCChannelClosedError,
   WebRTCChannelNotOpenError,
   WebRTCHandshakeTimeoutError,
+  WebRTCKeepAliveTimeoutError,
   WebRTCProtocolError,
   WebRTCQueueOverflowError,
+  WebRTCReconnectExhaustedError,
   WebRTCTransportError,
   WebRTCUnreliableChannelError,
   type WebRTCTransportErrorCode,
 } from './errors.js';
+export { type WebRTCKeepAliveOptions } from './heartbeat.js';
 export {
   getUTF8ByteLength,
   parseWebRTCFrame,
@@ -30,6 +40,7 @@ export {
   type WebRTCCancelFrame,
   type WebRTCClientFrame,
   type WebRTCCompleteFrame,
+  type WebRTCConnectionParams,
   type WebRTCDataFrame,
   type WebRTCErrorFrame,
   type WebRTCFrameParseError,
@@ -40,6 +51,7 @@ export {
   type WebRTCProcedureType,
   type WebRTCProtocolFrame,
   type WebRTCReadyFrame,
+  type WebRTCReconnectFrame,
   type WebRTCRequestFrame,
   type WebRTCRequestId,
   type WebRTCResultFrame,

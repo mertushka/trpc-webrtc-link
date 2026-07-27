@@ -77,6 +77,19 @@ describe('protocol validation', () => {
       'Handshake role must be "client"',
     ],
     [
+      'invalid connection parameters',
+      JSON.stringify({
+        protocol: TRPC_WEBRTC_PROTOCOL,
+        type: 'handshake',
+        role: 'client',
+        connectionParams: {
+          token: 123,
+        },
+      }),
+      undefined,
+      'connectionParams must contain only string values',
+    ],
+    [
       'invalid request id',
       JSON.stringify({
         protocol: TRPC_WEBRTC_PROTOCOL,
@@ -113,6 +126,19 @@ describe('protocol validation', () => {
       'Request path is invalid',
     ],
     [
+      'invalid last event id',
+      JSON.stringify({
+        protocol: TRPC_WEBRTC_PROTOCOL,
+        type: 'request',
+        id: 'request',
+        procedureType: 'subscription',
+        path: 'clock',
+        lastEventId: '',
+      }),
+      undefined,
+      'lastEventId is invalid',
+    ],
+    [
       'invalid result kind',
       JSON.stringify({
         protocol: TRPC_WEBRTC_PROTOCOL,
@@ -122,6 +148,17 @@ describe('protocol validation', () => {
       }),
       undefined,
       'Result kind is invalid',
+    ],
+    [
+      'invalid data event id',
+      JSON.stringify({
+        protocol: TRPC_WEBRTC_PROTOCOL,
+        type: 'data',
+        id: 'request',
+        eventId: '',
+      }),
+      undefined,
+      'eventId is invalid',
     ],
     [
       'missing error payload',
@@ -153,6 +190,16 @@ describe('protocol validation', () => {
       }),
       undefined,
       'Ping nonce is invalid',
+    ],
+    [
+      'oversized reconnect reason',
+      JSON.stringify({
+        protocol: TRPC_WEBRTC_PROTOCOL,
+        type: 'reconnect',
+        reason: 'x'.repeat(1_025),
+      }),
+      undefined,
+      'Reconnect reason is invalid',
     ],
     [
       'unknown frame type',

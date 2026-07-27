@@ -2,6 +2,7 @@ export const TRPC_WEBRTC_PROTOCOL = 'trpc-webrtc/1' as const;
 
 export type WebRTCRequestId = string;
 export type WebRTCProcedureType = 'query' | 'mutation' | 'subscription';
+export type WebRTCConnectionParams = Record<string, string>;
 
 interface WebRTCProtocolFrameBase<TType extends string> {
   protocol: typeof TRPC_WEBRTC_PROTOCOL;
@@ -10,6 +11,7 @@ interface WebRTCProtocolFrameBase<TType extends string> {
 
 export interface WebRTCHandshakeFrame extends WebRTCProtocolFrameBase<'handshake'> {
   role: 'client';
+  connectionParams?: WebRTCConnectionParams;
 }
 
 export type WebRTCReadyFrame = WebRTCProtocolFrameBase<'ready'>;
@@ -19,6 +21,10 @@ export interface WebRTCRequestFrame extends WebRTCProtocolFrameBase<'request'> {
   procedureType: WebRTCProcedureType;
   path: string;
   input?: unknown;
+  /**
+   * The most recently delivered tracked subscription event.
+   */
+  lastEventId?: string;
 }
 
 export type WebRTCResultFrame =
@@ -35,6 +41,10 @@ export type WebRTCResultFrame =
 export interface WebRTCDataFrame extends WebRTCProtocolFrameBase<'data'> {
   id: WebRTCRequestId;
   data?: unknown;
+  /**
+   * Present when the subscription yielded tRPC's `tracked()` envelope.
+   */
+  eventId?: string;
 }
 
 export interface WebRTCErrorFrame extends WebRTCProtocolFrameBase<'error'> {
@@ -59,6 +69,10 @@ export interface WebRTCPongFrame extends WebRTCProtocolFrameBase<'pong'> {
   nonce: string;
 }
 
+export interface WebRTCReconnectFrame extends WebRTCProtocolFrameBase<'reconnect'> {
+  reason?: string;
+}
+
 export type WebRTCClientFrame =
   WebRTCHandshakeFrame | WebRTCRequestFrame | WebRTCCancelFrame | WebRTCPingFrame | WebRTCPongFrame;
 
@@ -69,7 +83,8 @@ export type WebRTCServerFrame =
   | WebRTCErrorFrame
   | WebRTCCompleteFrame
   | WebRTCPingFrame
-  | WebRTCPongFrame;
+  | WebRTCPongFrame
+  | WebRTCReconnectFrame;
 
 export type WebRTCProtocolFrame = WebRTCClientFrame | WebRTCServerFrame;
 
@@ -85,6 +100,7 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9._~-]{1,128}$/;
 const MAX_PATH_LENGTH = 4096;
 const MAX_NONCE_LENGTH = 128;
 const MAX_REASON_LENGTH = 1024;
+const MAX_EVENT_ID_LENGTH = 4096;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -96,6 +112,14 @@ function isRequestId(value: unknown): value is string {
 
 function hasValidNonce(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_NONCE_LENGTH;
+}
+
+function hasValidEventId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_EVENT_ID_LENGTH;
+}
+
+function hasValidConnectionParams(value: unknown): value is WebRTCConnectionParams {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string');
 }
 
 function malformed(message: string): WebRTCFrameParseResult {
@@ -172,9 +196,16 @@ export function parseWebRTCFrame(
 
   switch (value.type) {
     case 'handshake':
-      return value.role === 'client'
-        ? { ok: true, frame: value as unknown as WebRTCHandshakeFrame }
-        : malformed('Handshake role must be "client"');
+      if (value.role !== 'client') {
+        return malformed('Handshake role must be "client"');
+      }
+      if (
+        value.connectionParams !== undefined &&
+        !hasValidConnectionParams(value.connectionParams)
+      ) {
+        return malformed('Handshake connectionParams must contain only string values');
+      }
+      return { ok: true, frame: value as unknown as WebRTCHandshakeFrame };
     case 'ready':
       return { ok: true, frame: value as unknown as WebRTCReadyFrame };
     case 'request':
@@ -195,6 +226,9 @@ export function parseWebRTCFrame(
       ) {
         return malformed('Request path is invalid');
       }
+      if (value.lastEventId !== undefined && !hasValidEventId(value.lastEventId)) {
+        return malformed('Request lastEventId is invalid');
+      }
       return { ok: true, frame: value as unknown as WebRTCRequestFrame };
     case 'result':
       if (!isRequestId(value.id)) {
@@ -205,9 +239,13 @@ export function parseWebRTCFrame(
       }
       return { ok: true, frame: value as unknown as WebRTCResultFrame };
     case 'data':
-      return isRequestId(value.id)
-        ? { ok: true, frame: value as unknown as WebRTCDataFrame }
-        : malformed('Data id is invalid');
+      if (!isRequestId(value.id)) {
+        return malformed('Data id is invalid');
+      }
+      if (value.eventId !== undefined && !hasValidEventId(value.eventId)) {
+        return malformed('Data eventId is invalid');
+      }
+      return { ok: true, frame: value as unknown as WebRTCDataFrame };
     case 'error':
       if (value.id !== null && !isRequestId(value.id)) {
         return malformed('Error id is invalid');
@@ -239,6 +277,14 @@ export function parseWebRTCFrame(
       return hasValidNonce(value.nonce)
         ? { ok: true, frame: value as unknown as WebRTCPongFrame }
         : malformed('Pong nonce is invalid');
+    case 'reconnect':
+      if (
+        value.reason !== undefined &&
+        (typeof value.reason !== 'string' || value.reason.length > MAX_REASON_LENGTH)
+      ) {
+        return malformed('Reconnect reason is invalid');
+      }
+      return { ok: true, frame: value as unknown as WebRTCReconnectFrame };
     default:
       return malformed(`Unknown frame type: ${value.type}`);
   }

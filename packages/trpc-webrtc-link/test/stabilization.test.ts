@@ -96,6 +96,41 @@ describe('transport failure paths', () => {
         openTimeoutMs: Number.POSITIVE_INFINITY,
       }),
     ).toThrow('openTimeoutMs');
+    expect(() =>
+      createClient({
+        channel: pair.client,
+        transformer: superjson,
+        reconnect: true,
+      }),
+    ).toThrow('channel factory');
+    expect(() =>
+      createClient({
+        channel: () => pair.client,
+        transformer: superjson,
+        reconnect: {
+          enabled: true,
+          maxAttempts: -1,
+        },
+      }),
+    ).toThrow('maxAttempts');
+    expect(() =>
+      createClient({
+        channel: pair.client,
+        transformer: superjson,
+        keepAlive: {
+          enabled: true,
+          intervalMs: 0,
+        },
+      }),
+    ).toThrow('intervalMs');
+    expect(() =>
+      createWebRTCHandler({
+        router: testRouter,
+        channel: pair.server,
+        peer: { name: 'test-peer' },
+        maxConcurrentOperations: 0,
+      }),
+    ).toThrow('maxConcurrentOperations');
   });
 
   it('times out a server that never receives a handshake', async () => {
@@ -294,6 +329,7 @@ describe('transport failure paths', () => {
             contextCreations: 1,
             subscriptionCancellations: 0,
             queryCancellations: 0,
+            trackedInputs: [],
           },
           peerName: 'test-peer',
         };

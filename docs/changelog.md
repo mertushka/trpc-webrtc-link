@@ -7,8 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-28
+
 ### Added
 
+- Reusable data-channel factories with explicit `connect()` and `reconnect()`,
+  automatic subscription reconnection, bounded retry policy, and public
+  connection-state notifications.
+- Full tRPC `tracked()` event support, including runtime `{ id, data }` values,
+  result-level event IDs, `retryLink` recovery, and last-event resumption after
+  channel replacement.
+- Client and server keep-alive with configurable ping intervals and pong
+  deadlines.
+- Per-attempt connection parameters for context authentication, server-requested
+  reconnect notifications, and configurable concurrent-operation limits.
+- Factory attempt metadata and abort signals so signaling work can be cancelled
+  on timeout or disposal.
 - A server-side handshake timeout covering protocol negotiation and asynchronous
   context creation.
 - Explicit install-script approvals enforced by the repository's pinned npm
@@ -16,7 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moved the package from `@mertushka/trpc-webrtc-link` to
+  `@webrtc-node/trpc-webrtc-link`.
 - Migrated the Node.js integration and example to `@webrtc-node/webrtc`.
+- Direct channels now negotiate eagerly; lazy setup is available for factories
+  through `lazy: true`.
+- Expanded the public link lifecycle API and documented signaling, reconnect,
+  tracked-event, authentication, keep-alive, and delivery semantics.
 - Updated development dependencies and expanded the tested tRPC peer range to
   `>=11.17.0 <11.19.0`.
 - Updated GitHub Actions to current versioned major releases and tightened
@@ -27,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apply one client deadline across channel opening and protocol negotiation,
   preserve disposal errors during asynchronous channel creation, and clean up
   failed writes.
+- Preserve link reuse after transient channel failure so tRPC `retryLink` can
+  obtain a new factory channel.
+- Encode tracked subscription output according to tRPC's runtime and inferred
+  type contract instead of serializing its private tuple and symbol.
+- Prevent an idle direct channel from being closed before the client's first
+  operation starts its handshake.
 - Cancel queued server responses when operations abort, validate timeout
   options, and reject invalid subscription state transitions.
 - Measure UTF-8 frame sizes correctly when `TextEncoder` is unavailable and
@@ -67,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit, Node-to-Node integration, type inference, packed consumer, and browser
   example coverage.
 
-[Unreleased]: https://github.com/webrtc-node/trpc-webrtc-link/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/webrtc-node/trpc-webrtc-link/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/webrtc-node/trpc-webrtc-link/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/webrtc-node/trpc-webrtc-link/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/webrtc-node/trpc-webrtc-link/releases/tag/v0.1.0

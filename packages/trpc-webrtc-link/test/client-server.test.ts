@@ -58,6 +58,26 @@ describe('WebRTC tRPC transport', () => {
     expect(onStopped).toHaveBeenCalledOnce();
   });
 
+  it('streams observable subscriptions', async () => {
+    harness = await createTestHarness();
+    const values: number[] = [];
+
+    await new Promise<void>((resolve, reject) => {
+      harness!.client.observableClock.subscribe(
+        { count: 3 },
+        {
+          onData(value) {
+            values.push(value);
+          },
+          onError: reject,
+          onComplete: resolve,
+        },
+      );
+    });
+
+    expect(values).toEqual([0, 1, 2]);
+  });
+
   it('cancels a subscription when the client unsubscribes', async () => {
     harness = await createTestHarness();
     const values: number[] = [];
@@ -139,6 +159,7 @@ describe('WebRTC tRPC transport', () => {
         code: 'FORBIDDEN',
         httpStatus: 403,
         path: 'fail',
+        transport: 'webrtc-test',
       },
     });
   });

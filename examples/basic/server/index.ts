@@ -10,7 +10,7 @@ import {
   createWebRTCHandler,
   type RTCDataChannelLike,
   type WebRTCHandler,
-} from '@mertushka/trpc-webrtc-link';
+} from '@webrtc-node/trpc-webrtc-link';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { appRouter } from '../shared/router.js';
 import { parseSignalingMessage, type SignalingMessage } from '../shared/signaling.js';
@@ -72,9 +72,15 @@ wss.on('connection', (socket) => {
         id: randomUUID(),
         peerConnection,
       },
-      createContext({ peer: metadata }) {
+      keepAlive: {
+        enabled: true,
+        intervalMs: 30_000,
+        pongTimeoutMs: 5_000,
+      },
+      createContext({ peer: metadata, connectionParams }) {
         return {
           peerId: metadata.id,
+          clientName: connectionParams?.client ?? 'unknown',
         };
       },
       onError({ error, path }) {

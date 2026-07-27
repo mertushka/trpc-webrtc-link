@@ -2,8 +2,10 @@ export type WebRTCTransportErrorCode =
   | 'CHANNEL_CLOSED'
   | 'CHANNEL_NOT_OPEN'
   | 'HANDSHAKE_TIMEOUT'
+  | 'KEEPALIVE_TIMEOUT'
   | 'PROTOCOL_ERROR'
   | 'QUEUE_OVERFLOW'
+  | 'RECONNECT_EXHAUSTED'
   | 'UNRELIABLE_CHANNEL';
 
 export class WebRTCTransportError extends Error {
@@ -37,6 +39,13 @@ export class WebRTCHandshakeTimeoutError extends WebRTCTransportError {
   }
 }
 
+export class WebRTCKeepAliveTimeoutError extends WebRTCTransportError {
+  public constructor(timeoutMs: number) {
+    super('KEEPALIVE_TIMEOUT', `WebRTC peer did not respond to a ping within ${timeoutMs}ms`);
+    this.name = 'WebRTCKeepAliveTimeoutError';
+  }
+}
+
 export class WebRTCProtocolError extends WebRTCTransportError {
   public constructor(message: string, options?: ErrorOptions) {
     super('PROTOCOL_ERROR', message, options);
@@ -51,6 +60,20 @@ export class WebRTCQueueOverflowError extends WebRTCTransportError {
     super('QUEUE_OVERFLOW', `RTCDataChannel send queue exceeded its ${queueLimit} frame limit`);
     this.name = 'WebRTCQueueOverflowError';
     this.queueLimit = queueLimit;
+  }
+}
+
+export class WebRTCReconnectExhaustedError extends WebRTCTransportError {
+  public readonly attempts: number;
+
+  public constructor(attempts: number, options?: ErrorOptions) {
+    super(
+      'RECONNECT_EXHAUSTED',
+      `Unable to establish an RTCDataChannel after ${attempts} attempt${attempts === 1 ? '' : 's'}`,
+      options,
+    );
+    this.name = 'WebRTCReconnectExhaustedError';
+    this.attempts = attempts;
   }
 }
 
